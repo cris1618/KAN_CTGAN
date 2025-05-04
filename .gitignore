@@ -1,0 +1,6 @@
+# ignore all CSV data files
+*.csv
+
+# ignore Python virtualenv / site-packages
+Code/KAN_CTGAN/Lib/
+EOF
