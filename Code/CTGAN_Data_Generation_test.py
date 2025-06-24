@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from ctgan import CTGAN
-from CTGAN_code import KAN_CTGAN
+from KAN_CTGAN_code import KAN_CTGAN
 
 # Import the dataset for the test
 #df = pd.read_csv("TestDatasets/adult.csv")
@@ -43,7 +43,7 @@ for col in df.columns:
 discrete_columns = [c for c in discrete_columns if c in df.columns]
 
 # Create the standard model 
-model = CTGAN(epochs=30, verbose=True)
+model = CTGAN(epochs=5, verbose=True)
 model.fit(df, discrete_columns=discrete_columns)
 print("Model trained successfully")
 
@@ -53,7 +53,12 @@ print(synthetic_df_STANDARD_CTGAN.head())
 synthetic_df_STANDARD_CTGAN.to_csv("TestDatasets/EnergySynthetic/synthetic_df_STANDARD_CTGAN.csv", index=False)
 
 # Try the KAN_CTGAN Model
-model = KAN_CTGAN(epochs=30, verbose=True)
+model = KAN_CTGAN(epochs=5, 
+                  verbose=True, 
+                  grid_size_gen=5, #5 
+                  spline_order_gen=3,
+                  grid_size_desc=5, #5
+                  spline_order_desc=3)
 model.fit(df, discrete_columns=discrete_columns)
 print("Model trained successfully")
 

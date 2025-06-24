@@ -4,3 +4,7 @@
 # ignore Python virtualenv / site-packages
 Code/KAN_CTGAN/Lib/
 EOF
+
+# Ignore litreature review folder
+Literature_Review/
+*.pdf
