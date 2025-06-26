@@ -34,7 +34,7 @@ from KAN_code import KAN, KANLinear
 # KAN GENERATOR (*)
 class Generator_KAN(Module):
     """
-    Generator for the CTGAN using Kolmogorov-Arnold (KAN)
+    Generator for the CTGAN using Kolmogorov-Arnold Layers (KAN)
     instead of the standard Residual blocks and Linear layers.
     """
     def __init__(self, embedding_dim, generator_dim, data_dim, grid_size=5, spline_order=3,
