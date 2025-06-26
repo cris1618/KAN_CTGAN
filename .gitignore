@@ -8,3 +8,6 @@ EOF
 # Ignore litreature review folder
 Literature_Review/
 *.pdf
+
+# No cache
+__pycache__/
