@@ -80,14 +80,14 @@ real_metric_2.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/TEST_EQU
 print(real_metric_1.mean()[["MAE", "MSE", "R2"]])
 print(real_metric_2.head())"""
 
-"""# Create the metrics datasets
+# Create the metrics datasets
 real_metrics_df, overall_syn_metrics_df_TVAE, detailed_syn_metrics_TVAE = evaluate_all_models(X_real, y_real, synthetic_datasets, models, test_size=0.2, random_state=1618, repeats=10)
 
 real_metrics_df.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/real_metrics.csv", index=False)
-overall_syn_metrics_df.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/overall_syn_metrics_TVAE.csv", index=False)
+overall_syn_metrics_df_TVAE.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/overall_syn_metrics_TVAE.csv", index=False)
 print(real_metrics_df.head())
-print(overall_syn_metrics_df.head())
-print(detailed_syn_metrics)"""
+print(overall_syn_metrics_df_TVAE.head())
+print(detailed_syn_metrics_TVAE)
 
 # Import the datasets with performances
 real_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/real_metrics.csv")
@@ -124,7 +124,7 @@ diff_metrics_TEST["Real_Delta_TEST_R2 (%)"] = (diff_metrics_TEST["Delta_TEST_R2"
 model_names = ["Standard TVAE", "KAN TVAE"]
 diff_metrics.index = model_names
 
-print(diff_metrics)
+#print(diff_metrics)
 
 # Calculate the scores
 diff_metrics["MAE_Score"] = 1 - (diff_metrics["Delta_MAE"] / real_metrics_df.mean()["MAE"]) 
@@ -135,18 +135,18 @@ diff_metrics["R2_Score"] = 1 - (diff_metrics["Delta_R2"] / real_metrics_df.mean(
 diff_metrics_TEST["MAE_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_MAE"] / real_metrics_df.mean()["MAE"])
 diff_metrics_TEST["MSE_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_MSE"] / real_metrics_df.mean()["MSE"])
 diff_metrics_TEST["R2_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_R2"] / real_metrics_df.mean()["R2"])
-print(diff_metrics_TEST)
+#print(diff_metrics_TEST)
 
 # Creating a overall score (since now MAE_Score, MSE_Score and R2_Score are in the same range (-inf, 1])
 diff_metrics["Overall_Score"] = (diff_metrics[["MAE_Score", "MSE_Score", "R2_Score"]].mean(axis=1))
 diff_metrics = diff_metrics.sort_values(by="Overall_Score", ascending=False)
-print(diff_metrics[["MAE_Score", "MSE_Score", "R2_Score"]])
-print(diff_metrics["Overall_Score"])
+#print(diff_metrics[["MAE_Score", "MSE_Score", "R2_Score"]])
+#print(diff_metrics["Overall_Score"])
 
 # TEST 
 diff_metrics_TEST["Overall_Score"] = (diff_metrics_TEST[["MAE_Score", "MSE_Score", "R2_Score"]].mean(axis=1))
 diff_metrics_TEST = diff_metrics_TEST.sort_values(by="Overall_Score")
-print(diff_metrics_TEST["Overall_Score"])
+#print(diff_metrics_TEST["Overall_Score"])
 
 # Add the test to diff_metrics
 test_overall_score = diff_metrics_TEST["Overall_Score"].iloc[0] 

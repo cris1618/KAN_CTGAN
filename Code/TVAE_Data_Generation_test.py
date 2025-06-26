@@ -43,7 +43,7 @@ for col in df.columns:
 discrete_columns = [c for c in discrete_columns if c in df.columns]
 
 # Create the standard model 
-model = TVAE(epochs=5, verbose=True)
+model = TVAE(epochs=50, verbose=True)
 model.fit(df, discrete_columns=discrete_columns)
 print("Model trained successfully")
 
@@ -53,7 +53,7 @@ print(synthetic_df_STANDARD_TVAE.head())
 synthetic_df_STANDARD_TVAE.to_csv("TestDatasets/EnergySynthetic/synthetic_df_STANDARD_TVAE.csv", index=False)
 
 # Try the KAN_TVAE Model
-model = KAN_TVAE(epochs=5, 
+model = KAN_TVAE(epochs=50, 
                   verbose=True, 
                   grid_size_enc=5, #5 
                   spline_order_enc=3,
