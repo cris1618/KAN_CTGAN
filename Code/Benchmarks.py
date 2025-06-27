@@ -1,34 +1,84 @@
 import sdgym
 from sdgym import create_single_table_synthesizer
-
+import warnings
+import numpy as np
+import pandas as pd
+import torch
+from torch import optim
+from torch.nn import BatchNorm1d, Dropout, LeakyReLU, Linear, Module, ReLU, Sequential, functional
+from tqdm import tqdm
+from ctgan.data_sampler import DataSampler
+from ctgan.data_transformer import DataTransformer
+from ctgan.errors import InvalidDataError
+from ctgan.synthesizers.base import BaseSynthesizer, random_state
+from KAN_CTGAN_code import KAN_CTGAN, Generator_KAN, Discriminator_KAN
+from KAN_TVAE_code import KAN_TVAE, KAN_Encoder, KAN_Decoder
 
 # Models to test
 synthetizers = ["GaussianCopulaSynthesizer", "CTGANSynthesizer", "TVAESynthesizer"]
 
+# Test
+print("HELLO")
+
 # Create Custom Synthesizer: KAN_CTGAN
 def get_trained_synthesizer_KAN_CTGAN(data, metadata):
-    return
+    discrete = [
+        f["name"]
+        for f in metadata["fields"]
+        if f["type"] in ("categorical", "ordinal")
+    ]
+
+    # Initialize the KAN_CTGAN model
+    synth = KAN_CTGAN()
+
+    # Train on the provided testing datasets
+    synth.fit(data, discrete_columns=discrete)
+
+    return synth
 
 def sample_from_synthesizer_KAN_CTGAN(synthesizer, n_rows):
-    return 
+    return synthesizer.sample(n_rows)
 
-KAN_CTGAN = create_single_table_synthesizer(
+KAN_CTGAN_synth = create_single_table_synthesizer(
     get_trained_synthesizer_fn=get_trained_synthesizer_KAN_CTGAN,
     sample_from_synthesizer_fn=sample_from_synthesizer_KAN_CTGAN,
-    display_name="KAN_CTGAN"
+    display_name="KAN-CTGAN"
 )
+
+print("KAN-CTGAN CREATED")
 
 # Create Custom Synthesizer: KAN_TAVE
 def get_trained_synthesizer_KAN_TVAE(data, metadata):
-    return
+    discrete = [
+        f["name"]
+        for f in metadata["fields"]
+        if f["type"] in ("categorical", "ordinal")
+    ]
+
+    # Initialize KAN_TVAE
+    synth = KAN_TVAE()
+
+    # Training
+    synth.fit(data, discrete_columns=discrete)
+
+    return synth
 
 def sample_from_synthesizer_KAN_TVAE(synthesizer, n_rows):
-    return 
+    return synthesizer.sample(n_rows)
 
-KAN_TVAE = create_single_table_synthesizer(
+KAN_TVAE_synth = create_single_table_synthesizer(
     get_trained_synthesizer_fn=get_trained_synthesizer_KAN_TVAE,
     sample_from_synthesizer_fn=sample_from_synthesizer_KAN_TVAE,
     display_name="KAN_TVAE"
 )
 
-#results = sdgym.benchmark_single_table()
+print("KAN-TVAE CREATED")
+
+# Output file path
+output_filepath = r"C:\Users\Utente\OneDrive\Desktop\Thesis\Benchmarks\SDGym_comparison.csv"
+
+results = sdgym.benchmark_single_table(
+    synthesizers=synthetizers,
+    custom_synthesizers=[KAN_CTGAN_synth, KAN_TVAE_synth],
+    output_filepath=output_filepath
+)
