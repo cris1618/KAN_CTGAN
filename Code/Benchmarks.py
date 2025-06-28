@@ -13,6 +13,7 @@ from ctgan.errors import InvalidDataError
 from ctgan.synthesizers.base import BaseSynthesizer, random_state
 from KAN_CTGAN_code import KAN_CTGAN, Generator_KAN, Discriminator_KAN
 from KAN_TVAE_code import KAN_TVAE, KAN_Encoder, KAN_Decoder
+from Hybrid_CTGAN_code import KAN_HYBRID_CTGAN
 
 # Models to test
 synthetizers = ["GaussianCopulaSynthesizer", "CTGANSynthesizer", "TVAESynthesizer"]
@@ -22,10 +23,11 @@ print("HELLO")
 
 # Create Custom Synthesizer: KAN_CTGAN
 def get_trained_synthesizer_KAN_CTGAN(data, metadata):
+    print("METADATA KEYS:", metadata)
     discrete = [
-        f["name"]
-        for f in metadata["fields"]
-        if f["type"] in ("categorical", "ordinal")
+        col_name
+        for col_name, col_info in metadata["columns"].items()
+        if col_info["sdtype"] == "categorical"
     ]
 
     # Initialize the KAN_CTGAN model
@@ -47,12 +49,42 @@ KAN_CTGAN_synth = create_single_table_synthesizer(
 
 print("KAN-CTGAN CREATED")
 
+# Create Custom Synthesizer: Hybrid_CTGAN
+def get_trained_synthesizer_Hybrid_CTGAN(data, metadata):
+    
+    discrete = [
+        col_name
+        for col_name, col_info in metadata["columns"].items()
+        if col_info["sdtype"] == "categorical"
+    ]
+
+    # Initialize Hybrid_CTGAN
+    synth = KAN_HYBRID_CTGAN()
+
+    # Training
+    synth.fit(data, discrete_columns=discrete)
+
+    return synth
+
+def sample_from_synthesizer_Hybrid_CTGAN(synthesizer, n_rows):
+    return synthesizer.sample(n_rows)
+
+KAN_HYBRID_CTGAN_synth = create_single_table_synthesizer(
+    get_trained_synthesizer_fn=get_trained_synthesizer_Hybrid_CTGAN,
+    sample_from_synthesizer_fn=sample_from_synthesizer_Hybrid_CTGAN,
+    display_name="KAN_HYBRID_CTGAN"
+)
+
+print("HYBRID-KAN-CTGAN CREATED")
+
+
 # Create Custom Synthesizer: KAN_TAVE
 def get_trained_synthesizer_KAN_TVAE(data, metadata):
+    
     discrete = [
-        f["name"]
-        for f in metadata["fields"]
-        if f["type"] in ("categorical", "ordinal")
+        col_name
+        for col_name, col_info in metadata["columns"].items()
+        if col_info["sdtype"] == "categorical"
     ]
 
     # Initialize KAN_TVAE
@@ -75,10 +107,13 @@ KAN_TVAE_synth = create_single_table_synthesizer(
 print("KAN-TVAE CREATED")
 
 # Output file path
-output_filepath = r"C:\Users\Utente\OneDrive\Desktop\Thesis\Benchmarks\SDGym_comparison.csv"
+output_filepath = r"C:\Users\Utente\OneDrive\Desktop\Thesis\Benchmarks\SDGym_comparison_TEST_HYBRID.csv"
 
 results = sdgym.benchmark_single_table(
     synthesizers=synthetizers,
-    custom_synthesizers=[KAN_CTGAN_synth, KAN_TVAE_synth],
-    output_filepath=output_filepath
+    custom_synthesizers=[KAN_CTGAN_synth, KAN_TVAE_synth, KAN_HYBRID_CTGAN_synth],
+    sdv_datasets=["adult"],
+    output_filepath=output_filepath,
+    limit_dataset_size=True,
+    show_progress=True
 )

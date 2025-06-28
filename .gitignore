@@ -2,7 +2,7 @@
 *.csv
 
 # ignore Python virtualenv / site-packages
-Code/KAN_CTGAN/Lib/
+venv/
 EOF
 
 # Ignore litreature review folder
