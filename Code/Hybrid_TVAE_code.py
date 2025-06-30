@@ -19,6 +19,7 @@ For the original CTGAN design, see:
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn as nn
 from torch.nn import Linear, Module, Parameter, ReLU, Sequential
 from torch.nn.functional import cross_entropy
 from torch.optim import Adam
@@ -32,13 +33,9 @@ from ctgan.synthesizers.base import BaseSynthesizer, random_state
 from KAN_code import KAN, KANLinear
 
 # (*) KAN ENCODER
-class KAN_Encoder(Module):
-    """Encoder for the KAN_TVAE using Kolmogorov-Arnold Layers(KAN)
-    instead of the standard Residual blocks and Linear layers.
-
-    This Encoder uses one KAN to map x -> [mu, log(sd^2)] (Mean, and log 
-    of standard deviation squared). One could also use single KAN Layers, but
-    a single KAN for the moment results clenear and more elegant.
+class HybridEncoder(Module):
+    """TVAE Ecoder with a single KAN block at layer 'kan_layer_idx',
+    the rest remain as standard TVAE Linear Layers.
 
     Args:
         data_dim (int):
@@ -47,52 +44,60 @@ class KAN_Encoder(Module):
             Size of each hidden layer.
         embedding_dim (int):
             Size of the output vector.
+        kan_layer_idx (int): index of KAN layer.
         grid_size, spline_order, etc. (int): 
             Hyperparameters for the KAN layers. 
     """
 
     def __init__(self, data_dim, compress_dims, embedding_dim, 
-                 grid_size=5, spline_order=3, scale_noise=0.1, 
+                 kan_layer_idx=0, grid_size=5, spline_order=3, scale_noise=0.1, 
                  scale_base=1.0, scale_spline=1.0, base_activation=torch.nn.SiLU,
                  grid_eps=0.02, grid_range=[-1, 1]):
-        super(KAN_Encoder, self).__init__()
+        super(HybridEncoder, self).__init__()
+        self.kan_layer_idx = kan_layer_idx
 
-        # Single KAN with final output size = 2 * embedding_dim
-        dims = [data_dim] + list(compress_dims) + [2 * embedding_dim]
-        self.kan = KAN(
-            dims,
-            grid_size=grid_size,
-            spline_order=spline_order,
-            scale_noise=scale_noise,
-            scale_base=scale_base,
-            scale_spline=scale_spline,
-            base_activation=base_activation,
-            grid_eps=grid_eps,
-            grid_range=grid_range
-        )
+        # Swapping KAN layer when needed
+        layers = []
+        dim = data_dim
+        for i, out_dim in enumerate(compress_dims):
+            if i == kan_layer_idx:
+                layers += [
+                    KANLinear(dim, out_dim,
+                              grid_size=grid_size,
+                              spline_order=spline_order,
+                              scale_noise=scale_noise,
+                              scale_base=scale_base,
+                              scale_spline=scale_spline,
+                              base_activation=base_activation,
+                              grid_eps=grid_eps,
+                              grid_range=grid_range),
+                    ReLU()
+                ]
+            else:
+                layers += [
+                    Linear(dim, out_dim),
+                    ReLU()
+                ]
+            dim = out_dim
+        
+        self.seq = Sequential(*layers)
+        # Final VAE heads unchanged
+        self.fc_mu = Linear(dim, embedding_dim)
+        self.fc_logvar = Linear(dim, embedding_dim)
 
     def forward(self, x):
         """Encode the passed input x."""
-        # x: [batch, data_dim]
-        out = self.kan(x) # [batch, 2*embedding_dim]
-        # Splits the outpt into two equal parts along the feature dimension
-        # Since out has shape [batch, 2*embedding_dim], the following code
-        # will return a tuple of two tensors, each of shape [batch, embedding_dim]
-        mu, logvar = out.chunk(2, dim=1) 
-        std = torch.exp(0.5 * logvar)
+        h = self.seq(x)
+        mu = self.fc_mu(h)
+        logvar = self.fc_logvar(h)
+        std = torch.exp(0.5*logvar)
         return mu, std, logvar
 
 
 # (*) KAN DECODER
-class KAN_Decoder(Module):
-    """Decoder for the KAN_TVAE using Kolmogorov-Arnold Layers(KAN)
-    instead of the standard Residual blocks and Linear layers.
-
-    This Decoder uses one KAN to map [mu, log(sd^2)] (Mean and log 
-    of standard deviation squared from the latent space, i.e. output 
-    of the encoder) ->  x̂ of dimension data_dim. One could also use 
-    single KAN Layers, but a single KAN for the moment results clenear 
-    and more elegant.
+class HybridDecoder(Module):
+    """TVAE Decoder with a single KAN block at layer 'kan_layer_idx',
+    the rest remain as standard TVAE Linear layers.
 
     Args:
         embedding_dim (int):
@@ -101,32 +106,50 @@ class KAN_Decoder(Module):
             Size of each hidden layer.
         data_dim (int):
             Dimensions of the data.
+        kan_layer_idx (int): index of KAN layer.
         grid_size, spline_order, etc. (int): 
             Hyperparameters for the KAN layers. 
     """
 
     def __init__(self, embedding_dim, decompress_dims, data_dim,
-                 grid_size=5, spline_order=3, scale_noise=0.1, 
+                 kan_layer_idx=0, grid_size=5, spline_order=3, scale_noise=0.1, 
                  scale_base=1.0, scale_spline=1.0, base_activation=torch.nn.SiLU,
                  grid_eps=0.02, grid_range=[-1, 1]):
-        super(KAN_Decoder, self).__init__()
-        dims = [embedding_dim] + list(decompress_dims) + [data_dim]
-        self.kan = KAN(
-            dims,
-            grid_size=grid_size,
-            spline_order=spline_order,
-            scale_noise=scale_noise,
-            scale_base=scale_base,
-            scale_spline=scale_spline,
-            base_activation=base_activation,
-            grid_eps=grid_eps,
-            grid_range=grid_range
-        )
+        super(HybridDecoder, self).__init__()
+        self.kan_layer_idx = kan_layer_idx
+        # Swapping KAN layer when needed
+        layers = []
+        dim = embedding_dim
+        for i, out_dim in enumerate(decompress_dims):
+            if i == kan_layer_idx:
+                layers += [
+                    KANLinear(dim, out_dim,
+                              grid_size=grid_size,
+                              spline_order=spline_order,
+                              scale_noise=scale_noise,
+                              scale_base=scale_base,
+                              scale_spline=scale_spline,
+                              base_activation=base_activation,
+                              grid_eps=grid_eps,
+                              grid_range=grid_range),
+                    ReLU()
+                ]
+            else:
+                layers += [
+                    Linear(dim, out_dim),
+                    ReLU()
+                ]
+            dim = out_dim
+        
+        # Final projection to data_dim
+        layers.append(Linear(dim, data_dim))
+
+        self.seq = Sequential(*layers)
         self.sigma = Parameter(torch.ones(data_dim) * 0.1)
 
     def forward(self, z):
         """Decode the passed input z"""
-        x_recon = self.kan(z)
+        x_recon = self.seq(z)
         return  x_recon, self.sigma
     
 
@@ -157,9 +180,9 @@ def _loss_function(recon_x, x, sigmas, mu, logvar, output_info, factor):
     return sum(loss) * factor / x.size()[0], KLD / x.size()[0]
 
 # (*) KAN_TVAE
-class KAN_TVAE(BaseSynthesizer):
-    """KA_TVAE. Instead of MLPs, the Encoder and Decoder
-       use Kolmogorov-Arnold Networks (KANs)"""
+class HYBRID_KAN_TVAE(BaseSynthesizer):
+    """HYBRID_KAN_TVAE. Instead of MLPs, the Encoder and Decoder
+       use Kolmogorov-Arnold Networks (KANs), only in one layer"""
 
     def __init__(
         self,
@@ -203,10 +226,10 @@ class KAN_TVAE(BaseSynthesizer):
 
         self._device = torch.device(device)
 
-    # (*) KAN_TVAE Fit
+    # (*) HYBRID_KAN_TVAE Fit
     @random_state
     def fit(self, train_data, discrete_columns=()):
-        """Fit the KAN_TVAE Synthesizer models to the training data.
+        """Fit the HYBRID_KAN_TVAE Synthesizer models to the training data.
 
         Args:
             train_data (numpy.ndarray or pandas.DataFrame):
@@ -224,9 +247,9 @@ class KAN_TVAE(BaseSynthesizer):
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=False)
 
         data_dim = self.transformer.output_dimensions
-        # (*) Use KAN_Encder and KAN_Decoder
-        encoder = KAN_Encoder(data_dim, self.compress_dims, self.embedding_dim).to(self._device)
-        self.decoder = KAN_Decoder(self.embedding_dim, self.decompress_dims, data_dim).to(self._device)
+        # (*) Use HybridEncder and HybridDecoder
+        encoder = HybridEncoder(data_dim, self.compress_dims, self.embedding_dim).to(self._device)
+        self.decoder = HybridDecoder(self.embedding_dim, self.decompress_dims, data_dim).to(self._device)
         optimizerAE = Adam(
             list(encoder.parameters()) + list(self.decoder.parameters()), weight_decay=self.l2scale
         )

@@ -20,11 +20,14 @@ from Utilities import overall_similarity, evaluate_all_models
 real_df = pd.read_csv("TestDatasets/energydata_complete.csv")
 synthetic_df_STANDARD_CTGAN = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_STANDARD_CTGAN.csv")
 synthetic_df_KAN_CTGAN = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_KAN_CTGAN.csv")
+synthetc_df_HYBRID_CTGAN = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_Hybrid_CTGAN.csv")
+
 
 # Evaluate the Predictive Efficacy
 real_df = real_df.drop("date", axis=1)
 synthetic_df_STANDARD_CTGAN = synthetic_df_STANDARD_CTGAN.drop("date", axis=1)
 synthetic_df_KAN_CTGAN = synthetic_df_KAN_CTGAN.drop("date", axis=1)
+synthetc_df_HYBRID_CTGAN = synthetc_df_HYBRID_CTGAN.drop("date", axis=1)
 
 # Split the real dataset in two random subsets (TO TEST THE FUNCTION)
 real_data_part_1, real_data_part_2 = train_test_split(real_df, test_size=0.5, random_state=1618)
@@ -39,6 +42,9 @@ print("Similarity between real data and synthetic data with Standard CTGAN: ", s
 sim_score_KAN_CTGAN = overall_similarity(real_df, synthetic_df_KAN_CTGAN)
 print("Similarity between real data and synthetic data with KAN CTGAN: ", sim_score_KAN_CTGAN)
 
+sim_score_HYBRID_CTGAN = overall_similarity(real_df, synthetc_df_HYBRID_CTGAN)
+print("Similarity between real data and synthetic data with HYBRID KAN CTGAN: ", sim_score_HYBRID_CTGAN)
+
 # Evaluate the ML efficacy
 # Divide all dataframes in training and targets
 X_real = real_df.drop(["Appliances"], axis=1)
@@ -50,10 +56,14 @@ y_STANDARD_CTGAN = synthetic_df_STANDARD_CTGAN["Appliances"]
 X_KAN_CTGAN = synthetic_df_KAN_CTGAN.drop(["Appliances"], axis=1)
 y_KAN_CTGAN = synthetic_df_KAN_CTGAN["Appliances"]
 
+X_HYBRID_KAN_CTGAN = synthetc_df_HYBRID_CTGAN.drop(["Appliances"], axis=1)
+y_HYBRID_KAN_CTGAN = synthetc_df_HYBRID_CTGAN["Appliances"]
+
 # Create a dictionary for the synthetic data and one for the ML models that will be used
 synthetic_datasets = {
     "STANDARD CTGAN": (X_STANDARD_CTGAN, y_STANDARD_CTGAN),
     "KAN CTGAN": (X_KAN_CTGAN, y_KAN_CTGAN),
+    "HYBRID KAN CTGAN": (X_HYBRID_KAN_CTGAN, y_HYBRID_KAN_CTGAN)
 }
 
 models = {
@@ -81,6 +91,7 @@ print(real_metric_1.mean()[["MAE", "MSE", "R2"]])
 print(real_metric_2.head())"""
 
 """# Create the metrics datasets
+print("Start Evaluation")
 real_metrics_df, overall_syn_metrics_df, detailed_syn_metrics = evaluate_all_models(X_real, y_real, synthetic_datasets, models, test_size=0.2, random_state=1618, repeats=10)
 
 real_metrics_df.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/real_metrics.csv", index=False)
@@ -90,9 +101,9 @@ print(overall_syn_metrics_df.head())
 print(detailed_syn_metrics)"""
 
 # Import the datasets with performances
-real_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/real_metrics.csv")
-overall_syn_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/overall_syn_metrics.csv")
-TEST = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/TEST_EQUAL_TO_REAL.csv")
+real_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/real_metrics.csv")
+overall_syn_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/overall_syn_metrics_CTGAN_100Ep_Disc_KAN.csv")
+TEST = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/TEST_EQUAL_TO_REAL.csv")
 
 # Create diff metrics to store the differences in performance from the original data
 # Compute the differences
@@ -121,7 +132,7 @@ diff_metrics["Real_Delta_R2 (%)"] = (diff_metrics["Delta_R2"] / (real_metrics_df
 # TEST
 diff_metrics_TEST["Real_Delta_TEST_R2 (%)"] = (diff_metrics_TEST["Delta_TEST_R2"] / (real_metrics_df.mean()["R2"])) * 100 
 
-model_names = ["Standard CTGAN", "KAN CTGAN"]
+model_names = ["Standard CTGAN", "KAN CTGAN", "Hybrid KAN CTGAN", "DISC KAN CTGAN"]
 diff_metrics.index = model_names
 
 print(diff_metrics)

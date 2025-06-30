@@ -20,11 +20,13 @@ from Utilities import overall_similarity, evaluate_all_models
 real_df = pd.read_csv("TestDatasets/energydata_complete.csv")
 synthetic_df_STANDARD_TVAE = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_STANDARD_TVAE.csv")
 synthetic_df_KAN_TVAE = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_KAN_TVAE.csv")
+synthetic_df_hybrid_KAN_TVAE = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_Hybrid_KAN_TVAE.csv")
 
 # Evaluate the Predictive Efficacy
 real_df = real_df.drop("date", axis=1)
 synthetic_df_STANDARD_TVAE = synthetic_df_STANDARD_TVAE.drop("date", axis=1)
 synthetic_df_KAN_TVAE = synthetic_df_KAN_TVAE.drop("date", axis=1)
+synthetic_df_hybrid_KAN_TVAE = synthetic_df_hybrid_KAN_TVAE.drop("date", axis=1)
 
 # Split the real dataset in two random subsets (TO TEST THE FUNCTION)
 real_data_part_1, real_data_part_2 = train_test_split(real_df, test_size=0.5, random_state=1618)
@@ -39,6 +41,9 @@ print("Similarity between real data and synthetic data with Standard TVAE: ", si
 sim_score_KAN_TVAE = overall_similarity(real_df, synthetic_df_KAN_TVAE)
 print("Similarity between real data and synthetic data with KAN TVAE: ", sim_score_KAN_TVAE)
 
+sim_score_Hybrid_KAN_TVAE = overall_similarity(real_df, synthetic_df_hybrid_KAN_TVAE)
+print("Similarity between real data and synthetic data with Hybrid KAN TVAE: ", sim_score_Hybrid_KAN_TVAE)
+
 # Evaluate the ML efficacy
 # Divide all dataframes in training and targets
 X_real = real_df.drop(["Appliances"], axis=1)
@@ -50,10 +55,14 @@ y_STANDARD_TVAE = synthetic_df_STANDARD_TVAE["Appliances"]
 X_KAN_TVAE = synthetic_df_KAN_TVAE.drop(["Appliances"], axis=1)
 y_KAN_TVAE = synthetic_df_KAN_TVAE["Appliances"]
 
+X_Hybrid_KAN_TVAE = synthetic_df_hybrid_KAN_TVAE.drop(["Appliances"], axis=1)
+y_Hybrid_KAN_TVAE = synthetic_df_hybrid_KAN_TVAE["Appliances"]
+
 # Create a dictionary for the synthetic data and one for the ML models that will be used
 synthetic_datasets = {
     "STANDARD TVAE": (X_STANDARD_TVAE, y_STANDARD_TVAE),
     "KAN TVAE": (X_KAN_TVAE, y_KAN_TVAE),
+    "Hybrid KAN TVAE": (X_Hybrid_KAN_TVAE, y_Hybrid_KAN_TVAE)
 }
 
 models = {
@@ -121,7 +130,7 @@ diff_metrics["Real_Delta_R2 (%)"] = (diff_metrics["Delta_R2"] / (real_metrics_df
 # TEST
 diff_metrics_TEST["Real_Delta_TEST_R2 (%)"] = (diff_metrics_TEST["Delta_TEST_R2"] / (real_metrics_df.mean()["R2"])) * 100 
 
-model_names = ["Standard TVAE", "KAN TVAE"]
+model_names = ["Standard TVAE", "KAN TVAE", "Hybrid KAN TVAE"]
 diff_metrics.index = model_names
 
 #print(diff_metrics)
