@@ -18,6 +18,7 @@ from Utilities import overall_similarity, evaluate_all_models
 
 # Import the data 
 real_df = pd.read_csv("TestDatasets/energydata_complete.csv")
+# real_df = pd.read_csv("TestDatasets/news.csv") # TARGET COLUMN: shares
 synthetic_df_STANDARD_CTGAN = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_STANDARD_CTGAN.csv")
 synthetic_df_KAN_CTGAN = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_KAN_CTGAN.csv")
 synthetc_df_HYBRID_CTGAN = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_Hybrid_CTGAN.csv")
@@ -100,9 +101,9 @@ print(real_metrics_df.head())
 print(overall_syn_metrics_df.head())
 print(detailed_syn_metrics)"""
 
-# Import the datasets with performances
+# Import the datasets with performances (Regression)
 real_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/real_metrics.csv")
-overall_syn_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/overall_syn_metrics_CTGAN_100Ep_Disc_KAN.csv")
+overall_syn_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/overall_syn_metrics_CTGAN_100Ep_Disc_Gen_KAN.csv")
 TEST = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/TEST_EQUAL_TO_REAL.csv")
 
 # Create diff metrics to store the differences in performance from the original data
@@ -132,7 +133,7 @@ diff_metrics["Real_Delta_R2 (%)"] = (diff_metrics["Delta_R2"] / (real_metrics_df
 # TEST
 diff_metrics_TEST["Real_Delta_TEST_R2 (%)"] = (diff_metrics_TEST["Delta_TEST_R2"] / (real_metrics_df.mean()["R2"])) * 100 
 
-model_names = ["Standard CTGAN", "KAN CTGAN", "Hybrid KAN CTGAN", "DISC KAN CTGAN"]
+model_names = ["Standard CTGAN", "KAN CTGAN", "Hybrid KAN CTGAN", "DISC KAN CTGAN", "GEN KAN CTGAN"]
 diff_metrics.index = model_names
 
 print(diff_metrics)

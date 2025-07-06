@@ -12,7 +12,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Import the dataset for the test
 #df = pd.read_csv("TestDatasets/adult.csv")
-df = pd.read_csv("TestDatasets/energydata_complete.csv", nrows=10000)
+#df = pd.read_csv("TestDatasets/energydata_complete.csv", nrows=10000)
+#df = pd.read_csv("TestDatasets/covtype.csv") # TARGET COLUMN: Cover_Type
+#df = pd.read_csv("TestDatasets/alarm.csv") # TARGET COLUMN: AlarmSeverityName
+df = pd.read_csv("TestDatasets/credit.csv") # TARGET COLUMN: loan_status
+#df = pd.read_csv("TestDatasets/news.csv") # TARGET COLUMN: shares
 
 # Preprocessing the data
 df.columns = df.columns.str.strip()

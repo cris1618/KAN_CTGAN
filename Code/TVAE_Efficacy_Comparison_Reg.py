@@ -18,6 +18,7 @@ from Utilities import overall_similarity, evaluate_all_models
 
 # Import the data 
 real_df = pd.read_csv("TestDatasets/energydata_complete.csv")
+# real_df = pd.read_csv("TestDatasets/news.csv") # TARGET COLUMN: shares
 synthetic_df_STANDARD_TVAE = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_STANDARD_TVAE.csv")
 synthetic_df_KAN_TVAE = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_KAN_TVAE.csv")
 synthetic_df_hybrid_KAN_TVAE = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_Hybrid_KAN_TVAE.csv")

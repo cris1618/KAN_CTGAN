@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.linear_model import LinearRegression
@@ -192,3 +193,96 @@ def evaluate_all_models(X_real, y_real, synthetic_datasets, models, test_size=0.
     overall_syn_metrics_df = pd.DataFrame(overall_syn_metrics).T # Transpose to have metrics as columns
 
     return real_metrics_df, overall_syn_metrics_df, detailed_syn_metrics
+
+def evaluate_all_models_classification(X_real, y_real, synthetic_datasets, models, test_size=0.2, random_state=1618, repeats=10):
+    """
+    Evaluate all models on all synthetic datasets using repeated holdout for robust results (Classification tasks only).
+
+    Parameters:
+    - X_real (pd.DataFrame): Features from the real dataset
+    - y_real (pd.Series): Target variable from the real dataset
+    - synthetic_datasets (dict): Dictionary of synthetic datasets
+    - models (dict): Dictionary of models to evaluate
+    - test_size (float, optional): Proportion of data to use for testing. Defaults to 0.2.
+    - random_state (int, optional): Seed for random number generation. Defaults to 1618
+    - repeats (int, optional): Number of random splits of the data for statistical significant results. Defaults to 1
+
+    Returns:
+    - real_metrics_df (pd.DataFrame): Evaluation metrics for each model on real data
+    - overall_syn_metrics_df (pd.DataFrame): Average Evaluation metrics.
+    """
+     
+    # Scale the features (only numeric columns)
+    scaler = StandardScaler()
+    numeric_cols = X_real.select_dtypes(include=["number"]).columns
+    X_real[numeric_cols] = scaler.fit_transform(X_real[numeric_cols])
+
+    non_numeric = X_real.select_dtypes(exclude=["number"]).columns.tolist()
+    ohe = OneHotEncoder(sparse=False, handle_unknown="ignore")
+    cat = ohe.fit_transform(X_real[non_numeric])
+    cat_df = pd.DataFrame(cat, columns=ohe.get_feature_names_out(non_numeric), index=X_real.index)
+
+    X_real = pd.concat([X_real[numeric_cols], cat_df], axis=1)
+    
+    # Metrics and dict to accumulate results
+    metrics_names = ["Accuracy", "Precision", "Recall", "F1"]
+    real_accum = {m:[] for m in metrics_names}
+    syn_accum = {
+         method:{m:[] for m in metrics_names}
+         for method in synthetic_datasets
+    }
+
+    # Repeated holdouts
+    for i in range(repeats):
+        seed = random_state + i
+        X_train_real, X_test_real, y_train_real, y_test_real = train_test_split(
+             X_real, y_real, test_size=test_size, random_state=seed
+        )
+
+        # Evaluate on real
+        for name, model in models.items():
+            m = clone(model)
+            m.fit(X_train_real, y_train_real)
+            y_pred = m.predict(X_test_real)
+             
+            real_accum["Accuracy"].append(accuracy_score(y_test_real, y_pred))
+            real_accum["Precision"].append(precision_score(y_test_real, y_pred, average="weighted"))
+            real_accum["Recall"].append(recall_score(y_test_real, y_pred, average="weighted"))
+            real_accum["F1"].append(f1_score(y_test_real, y_pred, average="weighted"))
+
+        # Evaluate each synthetic data df
+        for method, (X_syn, y_syn) in synthetic_datasets.items():
+            numeric_cols_s = X_syn.select_dtypes(include=["number"]).columns
+            X_syn[numeric_cols_s] = scaler.fit_transform(X_syn[numeric_cols_s])
+            non_numeric = X_syn.select_dtypes(exclude=["number"]).columns.tolist()
+            ohe_s = OneHotEncoder(sparse=False, handle_unknown="ignore")
+            cat_s = ohe.fit_transform(X_syn[non_numeric])
+            cat_df_s = pd.DataFrame(cat_s, columns=ohe_s.get_feature_names_out(non_numeric), index=X_real.index)
+
+            X_syn = pd.concat([X_syn[numeric_cols], cat_df_s], axis=1)
+            Xs_train, _, ys_train, _ = train_test_split(
+                X_syn, y_syn, test_size=test_size, random_state=seed
+            )
+
+            for name, model in models.items():
+                m = clone(model)
+                m.fit(Xs_train, ys_train)
+                y_pred = m.predict(X_test_real) # Test on REAL
+
+                syn_accum[method]["Accuracy"].append(accuracy_score(y_test_real, y_pred))
+                syn_accum[method]["Precision"].append(precision_score(y_test_real, y_pred, average="weighted"))
+                syn_accum[method]['Recall'].append(recall_score(y_test_real, y_pred, average='weighted'))
+                syn_accum[method]['F1'].append(f1_score(y_test_real, y_pred, average='weighted')) 
+    
+    # Aggregate into DataFrames
+    real_metrics = {
+         m: np.mean(scores) for m, scores in real_accum.items()
+    }
+    real_metrics_df = pd.DataFrame([real_metrics])
+
+    overall_syn = {}
+    for method, metrics in syn_accum.items():
+        overall_syn[method] = {m: np.mean(scores) for m, scores in metrics.items()}
+    overall_syn_metrics_df = pd.DataFrame.from_dict(overall_syn, orient="index")
+
+    return real_metrics_df, overall_syn_metrics_df
