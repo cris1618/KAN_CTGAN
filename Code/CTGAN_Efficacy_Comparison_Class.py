@@ -93,8 +93,8 @@ print(detailed_syn_metrics)"""
 
 
 # Import the datasets with performances (Classification)
-real_metrics_df_class = pd.read_csv("TestDatasets/CreditSynthetic/SyntheticPerformanceFromCluster/real_metrics.csv")
-overall_syn_metrics_df_class = pd.read_csv("TestDatasets/CreditSynthetic/SyntheticPerformanceFromCluster/overall_syn_metrics.csv")
+real_metrics_df_class = pd.read_csv("TestDatasets/AlarmSynthetic/SyntheticPerformanceFromCluster/real_metrics.csv")
+overall_syn_metrics_df_class = pd.read_csv("TestDatasets/AlarmSynthetic/SyntheticPerformanceFromCluster/overall_syn_metrics.csv")
 #TEST = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/") 
 
 # Create diff metrics to store the differences in performance from the original data

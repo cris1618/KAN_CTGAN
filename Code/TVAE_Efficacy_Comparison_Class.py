@@ -91,8 +91,8 @@ print(overall_syn_metrics_df_TVAE.head())
 print(detailed_syn_metrics_TVAE)"""
 
 # Import the datasets with performances
-real_metrics_df = pd.read_csv("TestDatasets/AdultSynthetic/SyntheticPerformanceFromCluster/real_metrics_TVAE.csv")
-overall_syn_metrics_df_TVAE = pd.read_csv("TestDatasets/AdultSynthetic/SyntheticPerformanceFromCluster/overall_syn_metrics_TVAE.csv")
+real_metrics_df = pd.read_csv("TestDatasets/AlarmSynthetic/SyntheticPerformanceFromCluster/real_metrics_TVAE.csv")
+overall_syn_metrics_df_TVAE = pd.read_csv("TestDatasets/AlarmSynthetic/SyntheticPerformanceFromCluster/overall_syn_metrics_TVAE.csv")
 #TEST = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/TEST_EQUAL_TO_REAL.csv")
 
 # Create diff metrics to store the differences in performance from the original data
