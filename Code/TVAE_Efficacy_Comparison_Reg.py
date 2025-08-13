@@ -16,7 +16,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
 from Utilities import overall_similarity, evaluate_all_models
 
-# Import the data 
+"""# Import the data 
 real_df = pd.read_csv("TestDatasets/energydata_complete.csv")
 # real_df = pd.read_csv("TestDatasets/news.csv") # TARGET COLUMN: shares
 synthetic_df_STANDARD_TVAE = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_STANDARD_TVAE.csv")
@@ -81,7 +81,7 @@ models = {
 # Create fake dictionary
 real_data_dict = {
     "Real_Data": (X_real, y_real)
-}
+}"""
 
 """# Evaluate function
 # THIS IS TO PROVE THAT IF THE TRAINING DATA ARE VERY SIMILAR (BOTH REAL) THEN THE PERFORMANCE WILL BE ALMOST IDENTICAL
@@ -90,80 +90,60 @@ real_metric_2.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/TEST_EQU
 print(real_metric_1.mean()[["MAE", "MSE", "R2"]])
 print(real_metric_2.head())"""
 
-# Create the metrics datasets
+"""# Create the metrics datasets
 real_metrics_df, overall_syn_metrics_df_TVAE, detailed_syn_metrics_TVAE = evaluate_all_models(X_real, y_real, synthetic_datasets, models, test_size=0.2, random_state=1618, repeats=10)
 
 real_metrics_df.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/real_metrics.csv", index=False)
 overall_syn_metrics_df_TVAE.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/overall_syn_metrics_TVAE.csv", index=False)
 print(real_metrics_df.head())
 print(overall_syn_metrics_df_TVAE.head())
-print(detailed_syn_metrics_TVAE)
+print(detailed_syn_metrics_TVAE)"""
 
 # Import the datasets with performances
-real_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/real_metrics.csv")
-overall_syn_metrics_df_TVAE = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/overall_syn_metrics_TVAE.csv")
-TEST = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/TEST_EQUAL_TO_REAL.csv")
+real_metrics_df = pd.read_csv("TestDatasets/BikeSynthetic/SyntheticPerformanceFromCluster/real_metrics_TVAE.csv")
+overall_syn_metrics_df_TVAE = pd.read_csv("TestDatasets/BikeSynthetic/SyntheticPerformanceFromCluster/overall_syn_metrics_TVAE.csv")
+
 
 # Create diff metrics to store the differences in performance from the original data
 # Compute the differences
 diff_metrics = overall_syn_metrics_df_TVAE.copy()
-diff_metrics_TEST = TEST.copy()
 
 # Absolute difference
-for metric in ["MAE", "MSE", "R2"]:
+for metric in ["MAE", "MSE"]:
     diff_metrics[f"Delta_{metric}"] = abs(real_metrics_df.mean()[metric] - overall_syn_metrics_df_TVAE[f"{metric}_avg"])
 
-# TEST
-for metric in ["MAE", "MSE", "R2"]:
-    diff_metrics_TEST[f"Delta_TEST_{metric}"] = abs(real_metrics_df.mean()[metric] - TEST[f"{metric}_avg"])
+# Calculate RMSE 
+overall_syn_metrics_df_TVAE["RMSE_avg"] = np.sqrt(overall_syn_metrics_df_TVAE["MSE_avg"])
+real_rmse = np.sqrt(real_metrics_df.mean()["MSE"])
 
-# Percentages, relative difference
-for metric in ["MAE", "MSE"]:
-    diff_metrics[f"Real_Delta_{metric} (%)"] = (diff_metrics[f"Delta_{metric}"] / (real_metrics_df.mean()[metric])) * 100
+# Compute the difference is RMSE
+diff_metrics["Delta_RMSE"] = abs(real_rmse - overall_syn_metrics_df_TVAE["RMSE_avg"])
 
-# TEST 
-for metric in ["MAE", "MSE"]:
-    diff_metrics_TEST[f"Real_Delta_TEST_{metric} (%)"] = (diff_metrics_TEST[f"Delta_TEST_{metric}"] / (real_metrics_df.mean()[metric])) * 100
+# Absolute difference
+for metric in ["MAE"]:
+    diff_metrics[f"Delta_{metric}"] = abs(real_metrics_df.mean()[metric] - overall_syn_metrics_df_TVAE[f"{metric}_avg"])
 
-# For R2 the difference is simplier since it's already a percentage
-diff_metrics["Real_Delta_R2 (%)"] = (diff_metrics["Delta_R2"] / (real_metrics_df.mean()["R2"])) * 100 # CHECK HERE
+# Normalize the scores
+real_mae = real_metrics_df.mean()["MAE"]
 
-# TEST
-diff_metrics_TEST["Real_Delta_TEST_R2 (%)"] = (diff_metrics_TEST["Delta_TEST_R2"] / (real_metrics_df.mean()["R2"])) * 100 
+# Range: (-inf, 1], where 1 means perfect fit with real outputs
+diff_metrics["MAE_Score"] = 1 - (diff_metrics["Delta_MAE"] / real_mae)
+diff_metrics["RMSE_Score"] = 1 - (diff_metrics["Delta_RMSE"] / real_rmse)
+
+"""# Clamp at zero to keep in range [0,1]
+for col in ["MAE_Score","RMSE_Score","R2_Score"]:
+    diff_metrics[col] = diff_metrics[col].clip(lower=0)"""
+
 
 model_names = ["Standard TVAE", "KAN TVAE", "Hybrid KAN TVAE"]
 diff_metrics.index = model_names
 
-#print(diff_metrics)
-
-# Calculate the scores
-diff_metrics["MAE_Score"] = 1 - (diff_metrics["Delta_MAE"] / real_metrics_df.mean()["MAE"]) 
-diff_metrics["MSE_Score"] = 1 - (diff_metrics["Delta_MSE"] / real_metrics_df.mean()["MSE"])
-diff_metrics["R2_Score"] = 1 - (diff_metrics["Delta_R2"] / real_metrics_df.mean()["R2"])
-
-# TEST
-diff_metrics_TEST["MAE_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_MAE"] / real_metrics_df.mean()["MAE"])
-diff_metrics_TEST["MSE_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_MSE"] / real_metrics_df.mean()["MSE"])
-diff_metrics_TEST["R2_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_R2"] / real_metrics_df.mean()["R2"])
-#print(diff_metrics_TEST)
-
 # Creating a overall score (since now MAE_Score, MSE_Score and R2_Score are in the same range (-inf, 1])
-diff_metrics["Overall_Score"] = (diff_metrics[["MAE_Score", "MSE_Score", "R2_Score"]].mean(axis=1))
+diff_metrics["Overall_Score"] = (diff_metrics[["MAE_Score", "RMSE_Score"]].mean(axis=1)) 
 diff_metrics = diff_metrics.sort_values(by="Overall_Score", ascending=False)
-#print(diff_metrics[["MAE_Score", "MSE_Score", "R2_Score"]])
-#print(diff_metrics["Overall_Score"])
+print(diff_metrics[["MAE_Score", "RMSE_Score"]])
+print(diff_metrics["Overall_Score"])
 
-# TEST 
-diff_metrics_TEST["Overall_Score"] = (diff_metrics_TEST[["MAE_Score", "MSE_Score", "R2_Score"]].mean(axis=1))
-diff_metrics_TEST = diff_metrics_TEST.sort_values(by="Overall_Score")
-#print(diff_metrics_TEST["Overall_Score"])
-
-# Add the test to diff_metrics
-test_overall_score = diff_metrics_TEST["Overall_Score"].iloc[0] 
-
-# Append a new row to diff_metrics with the label "TEST" and the overall score value.
-new_row = pd.DataFrame({"Overall_Score": [test_overall_score]}, index=["TEST (Models trained with real data)"])
-diff_metrics = pd.concat([diff_metrics, new_row])
 
 # Visualize the rank
 fig, ax = plt.subplots(1,1,figsize=(12,6))

@@ -31,6 +31,22 @@ from ctgan.synthesizers.base import BaseSynthesizer, random_state
 # Import KAN (*)
 from KAN_code import KAN, KANLinear
 
+# KAN Residual (Resnet) (*)
+class ResidualKAN(Module):
+    "KAN residual layer"
+    def __init__(self, i, o, grid_size=5, spline_order=3, scale_noise=0.1, scale_base=1.0,
+                 scale_spline=1.0, base_activation=torch.nn.SiLU, grid_eps=0.02, grid_range=[-1,1]):
+        super().__init__()
+        self.kan = KANLinear(i, o, grid_size=grid_size, spline_order=spline_order, scale_noise=scale_noise, scale_base=scale_base,
+                            scale_spline=scale_spline, base_activation=base_activation, grid_eps=grid_eps, grid_range=grid_range)
+        self.bn = BatchNorm1d(o)
+        self.act = torch.nn.SiLU() # Different from CTGAN, Preserving suggestion from KAN original paper
+    def forward(self, x):
+        out = self.kan(x)
+        out = self.bn(out)
+        out = self.act(out)
+        return torch.cat([out, x], dim=1)
+
 # KAN GENERATOR (*)
 class Generator_KAN(Module):
     """
@@ -48,24 +64,22 @@ class Generator_KAN(Module):
         - grid_size, spline_order, etc.: Hyperparameters for the KAN layers. 
         """
         super(Generator_KAN, self).__init__()
-        layers_hidden = [embedding_dim] + list(generator_dim) + [data_dim]
-        self.kan = KAN(
-            layers_hidden,
-            grid_size=grid_size,
-            spline_order=spline_order,
-            scale_noise=scale_noise,
-            scale_base=scale_base,
-            scale_spline=scale_spline,
-            base_activation=base_activation,
-            grid_eps=grid_eps,
-            grid_range=grid_range
-        )
-    
+        dim = embedding_dim
+        seq = []
+        for item in list(generator_dim):
+            # Use ResidualKAN
+            seq += [ResidualKAN(dim, item, grid_size=grid_size, spline_order=spline_order, scale_noise=scale_noise, scale_base=scale_base,
+                                scale_spline=scale_spline, base_activation=base_activation, grid_eps=grid_eps, grid_range=grid_range)]
+            dim += item
+        # Last KANLayer for the output of dimension data_dim
+        seq.append(KANLinear(dim, data_dim))
+        self.seq = Sequential(*seq)
+
     def forward(self, input_):
         """
         Apply the KAN-based generator to the input.
         """
-        data = self.kan(input_)
+        data = self.seq(input_)
         return data
 
 # Original Discriminator
@@ -113,23 +127,6 @@ class Discriminator(Module):
         """Apply the Discriminator to the `input_`."""
         assert input_.size()[0] % self.pac == 0
         return self.seq(input_.view(-1, self.pacdim))
-
-
-class Residual(Module):
-    """Residual layer for the CTGAN."""
-
-    def __init__(self, i, o):
-        super(Residual, self).__init__()
-        self.fc = Linear(i, o)
-        self.bn = BatchNorm1d(o)
-        self.relu = ReLU()
-
-    def forward(self, input_):
-        """Apply the Residual layer to the `input_`."""
-        out = self.fc(input_)
-        out = self.bn(out)
-        out = self.relu(out)
-        return torch.cat([out, input_], dim=1)
 
 # Change Name (*)
 class Gen_KAN_CTGAN(BaseSynthesizer):

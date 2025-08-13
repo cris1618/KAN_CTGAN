@@ -34,13 +34,28 @@ from KAN_code import KAN, KANLinear
 # KAN Residual (Resnet) (*)
 class ResidualKAN(Module):
     "KAN residual layer"
-    def __init__(self, i, o, grid_size=5, spline_order=3, scale_noise=0.1, scale_base=1.0,
-                 scale_spline=1.0, base_activation=torch.nn.SiLU, grid_eps=0.02, grid_range=[-1,1]):
+    def __init__(self, i, o, 
+                 grid_size=5, 
+                 spline_order=3, 
+                 scale_noise=0.1, 
+                 scale_base=1.0,
+                 scale_spline=1.0, 
+                 base_activation=torch.nn.SiLU, 
+                 grid_eps=0.02, 
+                 grid_range=[-1,1]):
         super().__init__()
-        self.kan = KANLinear(i, o, grid_size=grid_size, spline_order=spline_order, scale_noise=scale_noise, scale_base=scale_base,
-                            scale_spline=scale_spline, base_activation=base_activation, grid_eps=grid_eps, grid_range=grid_range)
+        self.kan = KANLinear(i, o, 
+                             grid_size=grid_size, 
+                             spline_order=spline_order, 
+                             scale_noise=scale_noise, 
+                             scale_base=scale_base,
+                            scale_spline=scale_spline, 
+                            base_activation=base_activation, 
+                            grid_eps=grid_eps, 
+                            grid_range=grid_range)
         self.bn = BatchNorm1d(o)
         self.act = torch.nn.SiLU() # Different from CTGAN, Preserving suggestion from KAN original paper
+
     def forward(self, x):
         out = self.kan(x)
         out = self.bn(out)
@@ -66,13 +81,20 @@ class Generator_KAN(Module):
         super(Generator_KAN, self).__init__()
         dim = embedding_dim
         seq = []
-        for item in list(generator_dim):
+        for item in list(generator_dim): # generator_dim = (256, 256), so the loop runs twice. h0 and h1.
             # Use ResidualKAN
-            seq += [ResidualKAN(dim, item, grid_size=grid_size, spline_order=spline_order, scale_noise=scale_noise, scale_base=scale_base,
-                                scale_spline=scale_spline, base_activation=base_activation, grid_eps=grid_eps, grid_range=grid_range)]
+            seq += [ResidualKAN(dim, item, 
+                                grid_size=grid_size, 
+                                spline_order=spline_order, 
+                                scale_noise=scale_noise, 
+                                scale_base=scale_base,
+                                scale_spline=scale_spline, 
+                                base_activation=base_activation, 
+                                grid_eps=grid_eps, 
+                                grid_range=grid_range)]
             dim += item
         # Last KANLayer for the output of dimension data_dim
-        seq.append(KANLinear(dim, data_dim))
+        seq.append(KANLinear(dim, data_dim)) # h2
         self.seq = Sequential(*seq)
 
     def forward(self, input_):
@@ -85,7 +107,7 @@ class Generator_KAN(Module):
 # KAN DISCRIMINATOR (critic)(*)
 class Discriminator_KAN(Module):
     """
-    Discriminator for the CTGAN using KAN layers instead of linear layers.
+    Discriminator for the CTGAN using KAN layers instead of MLP layers.
     """   
     def __init__(self, input_dim, discriminator_dim, pac=10,
                  grid_size=5, spline_order=3, scale_noise=0.1, scale_base=1.0,
@@ -102,11 +124,13 @@ class Discriminator_KAN(Module):
             seq += [
                 KANLinear(dim, item, grid_size=grid_size,
                           spline_order=spline_order, 
-                          scale_noise=scale_noise, scale_base=scale_base,
+                          scale_noise=scale_noise, 
+                          scale_base=scale_base,
                           scale_spline=scale_spline,
-                          base_activation=base_activation, grid_eps=grid_eps,
+                          base_activation=base_activation, 
+                          grid_eps=grid_eps,
                           grid_range=grid_range),
-                LeakyReLU(0.2),
+                torch.nn.SiLU(0.2), # Better for KAN, LeakyReLU replaced
                 Dropout(0.5)
             ]
             dim = item
@@ -115,9 +139,11 @@ class Discriminator_KAN(Module):
         seq += [
             KANLinear(dim, 1, grid_size=grid_size,
                       spline_order=spline_order, 
-                      scale_noise=scale_noise, scale_base=scale_base,
+                      scale_noise=scale_noise, 
+                      scale_base=scale_base,
                       scale_spline=scale_spline,
-                      base_activation=base_activation, grid_eps=grid_eps,
+                      base_activation=base_activation, 
+                      grid_eps=grid_eps,
                       grid_range=grid_range)
         ]
         self.seq = Sequential(*seq)

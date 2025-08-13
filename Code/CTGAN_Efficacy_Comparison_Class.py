@@ -112,6 +112,7 @@ for metric in diff.columns:
 # Overall score
 score_cols = [c for c in diff.columns if c.endswith("Score")]
 diff["Overall_Score"] = diff[score_cols].mean(axis=1)
+print(diff["Overall_Score"])
 
 model_names = ["Standard CTGAN", "KAN CTGAN", "Hybrid KAN CTGAN", "DISC KAN CTGAN", "GEN KAN CTGAN"]
 diff.index = model_names

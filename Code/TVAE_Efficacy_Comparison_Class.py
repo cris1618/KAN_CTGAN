@@ -17,10 +17,10 @@ from sklearn.svm import SVC
 from Utilities import overall_similarity, evaluate_all_models_classification
 
 """# Import the data 
-real_df = pd.read_csv("TestDatasets/adult.csv")
-# real_df = pd.read_csv("TestDatasets/covtype.csv") # TARGET COLUMN: Cover_Type
-# real_df = pd.read_csv("TestDatasets/alarm.csv") # TARGET COLUMN: AlarmSeverityName
-# real_df = pd.read_csv("TestDatasets/credit.csv") # TARGET COLUMN: loan_status
+real_df = pd.read_csv("TestDatasets/adult.csv") # Binary Classification
+# real_df = pd.read_csv("TestDatasets/covtype.csv") # TARGET COLUMN: Cover_Type # Multiclass 7 classes
+# real_df = pd.read_csv("TestDatasets/alarm.csv") # TARGET COLUMN: AlarmSeverityName # Multiclass 3 classes
+# real_df = pd.read_csv("TestDatasets/credit.csv") # TARGET COLUMN: loan_status # Binary Classification
 synthetic_df_STANDARD_TVAE = pd.read_csv("TestDatasets/AdultSynthetic/synthetic_df_Adult_STANDARD_TVAE.csv")
 synthetic_df_KAN_TVAE = pd.read_csv("TestDatasets/AdultSynthetic/synthetic_df_Adult_KAN_TVAE.csv")
 synthetic_df_hybrid_KAN_TVAE = pd.read_csv("TestDatasets/AdultSynthetic/synthetic_df_Adult_Hybrid_KAN_TVAE.csv")
@@ -110,6 +110,7 @@ for metric in diff.columns:
 # Overall score
 score_cols = [c for c in diff.columns if c.endswith("Score")]
 diff["Overall_Score"] = diff[score_cols].mean(axis=1)
+print(diff["Overall_Score"])
 
 model_names = ["Standard TVAE", "KAN TVAE", "Hybrid TVAE"]
 diff.index = model_names

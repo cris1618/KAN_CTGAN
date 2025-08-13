@@ -16,7 +16,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
 from Utilities import overall_similarity, evaluate_all_models
 
-# Import the data 
+"""# Import the data 
 real_df = pd.read_csv("TestDatasets/energydata_complete.csv")
 # real_df = pd.read_csv("TestDatasets/news.csv") # TARGET COLUMN: shares
 synthetic_df_STANDARD_CTGAN = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_STANDARD_CTGAN.csv")
@@ -82,7 +82,7 @@ models = {
 # Create fake dictionary
 real_data_dict = {
     "Real_Data": (X_real, y_real)
-}
+}"""
 
 """# Evaluate function
 # THIS IS TO PROVE THAT IF THE TRAINING DATA ARE VERY SIMILAR (BOTH REAL) THEN THE PERFORMANCE WILL BE ALMOST IDENTICAL
@@ -102,71 +102,85 @@ print(overall_syn_metrics_df.head())
 print(detailed_syn_metrics)"""
 
 # Import the datasets with performances (Regression)
-real_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/real_metrics.csv")
-overall_syn_metrics_df = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/overall_syn_metrics_CTGAN_100Ep_Disc_Gen_KAN.csv")
-TEST = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/TEST_EQUAL_TO_REAL.csv")
+real_metrics_df = pd.read_csv("TestDatasets/BikeSynthetic/SyntheticPerformanceFromCluster/real_metrics.csv")
+overall_syn_metrics_df = pd.read_csv("TestDatasets/BikeSynthetic/SyntheticPerformanceFromCluster/overall_syn_metrics.csv")
+#TEST = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/TEST_EQUAL_TO_REAL.csv")
 
 # Create diff metrics to store the differences in performance from the original data
 # Compute the differences
 diff_metrics = overall_syn_metrics_df.copy()
-diff_metrics_TEST = TEST.copy()
+#diff_metrics_TEST = TEST.copy()
+
+# Calculate RMSE 
+overall_syn_metrics_df["RMSE_avg"] = np.sqrt(overall_syn_metrics_df["MSE_avg"])
+real_rmse = np.sqrt(real_metrics_df.mean()["MSE"])
+
+# Compute the difference is RMSE
+diff_metrics["Delta_RMSE"] = abs(real_rmse - overall_syn_metrics_df["RMSE_avg"])
 
 # Absolute difference
-for metric in ["MAE", "MSE", "R2"]:
+for metric in ["MAE"]:
     diff_metrics[f"Delta_{metric}"] = abs(real_metrics_df.mean()[metric] - overall_syn_metrics_df[f"{metric}_avg"])
 
-# TEST
+# Normalize the scores
+real_mae = real_metrics_df.mean()["MAE"]
+
+diff_metrics["MAE_Score"] = 1 - (diff_metrics["Delta_MAE"] / real_mae)
+diff_metrics["RMSE_Score"] = 1 - (diff_metrics["Delta_RMSE"] / real_rmse)
+
+
+"""# TEST
 for metric in ["MAE", "MSE", "R2"]:
-    diff_metrics_TEST[f"Delta_TEST_{metric}"] = abs(real_metrics_df.mean()[metric] - TEST[f"{metric}_avg"])
+    diff_metrics_TEST[f"Delta_TEST_{metric}"] = abs(real_metrics_df.mean()[metric] - TEST[f"{metric}_avg"])"""
 
-# Percentages, relative difference
+"""# Percentages, relative difference
 for metric in ["MAE", "MSE"]:
-    diff_metrics[f"Real_Delta_{metric} (%)"] = (diff_metrics[f"Delta_{metric}"] / (real_metrics_df.mean()[metric])) * 100
+    diff_metrics[f"Real_Delta_{metric} (%)"] = (diff_metrics[f"Delta_{metric}"] / (real_metrics_df.mean()[metric])) * 100"""
 
-# TEST 
+"""# TEST 
 for metric in ["MAE", "MSE"]:
-    diff_metrics_TEST[f"Real_Delta_TEST_{metric} (%)"] = (diff_metrics_TEST[f"Delta_TEST_{metric}"] / (real_metrics_df.mean()[metric])) * 100
+    diff_metrics_TEST[f"Real_Delta_TEST_{metric} (%)"] = (diff_metrics_TEST[f"Delta_TEST_{metric}"] / (real_metrics_df.mean()[metric])) * 100"""
 
-# For R2 the difference is simplier since it's already a percentage
-diff_metrics["Real_Delta_R2 (%)"] = (diff_metrics["Delta_R2"] / (real_metrics_df.mean()["R2"])) * 100 # CHECK HERE
+"""# For R2 the difference is simplier since it's already a percentage
+diff_metrics["Real_Delta_R2 (%)"] = (diff_metrics["Delta_R2"] / (real_metrics_df.mean()["R2"])) * 100 # CHECK HERE"""
 
 # TEST
-diff_metrics_TEST["Real_Delta_TEST_R2 (%)"] = (diff_metrics_TEST["Delta_TEST_R2"] / (real_metrics_df.mean()["R2"])) * 100 
+#diff_metrics_TEST["Real_Delta_TEST_R2 (%)"] = (diff_metrics_TEST["Delta_TEST_R2"] / (real_metrics_df.mean()["R2"])) * 100 
 
 model_names = ["Standard CTGAN", "KAN CTGAN", "Hybrid KAN CTGAN", "DISC KAN CTGAN", "GEN KAN CTGAN"]
 diff_metrics.index = model_names
 
 print(diff_metrics)
 
-# Calculate the scores
+"""# Calculate the scores
 diff_metrics["MAE_Score"] = 1 - (diff_metrics["Delta_MAE"] / real_metrics_df.mean()["MAE"]) 
 diff_metrics["MSE_Score"] = 1 - (diff_metrics["Delta_MSE"] / real_metrics_df.mean()["MSE"])
-diff_metrics["R2_Score"] = 1 - (diff_metrics["Delta_R2"] / real_metrics_df.mean()["R2"])
+diff_metrics["R2_Score"] = 1 - (diff_metrics["Delta_R2"] / real_metrics_df.mean()["R2"])"""
 
-# TEST
+"""# TEST
 diff_metrics_TEST["MAE_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_MAE"] / real_metrics_df.mean()["MAE"])
 diff_metrics_TEST["MSE_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_MSE"] / real_metrics_df.mean()["MSE"])
 diff_metrics_TEST["R2_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_R2"] / real_metrics_df.mean()["R2"])
-print(diff_metrics_TEST)
+print(diff_metrics_TEST)"""
 
 
-# Creating a overall score (since now MAE_Score, MSE_Score and R2_Score are in the same range (-inf, 1])
-diff_metrics["Overall_Score"] = (diff_metrics[["MAE_Score", "MSE_Score", "R2_Score"]].mean(axis=1))
+# Creating a overall score (since now MAE_Score, RMSE_Score and R2_Score are in the same range (-inf, 1])
+diff_metrics["Overall_Score"] = (diff_metrics[["MAE_Score", "RMSE_Score"]].mean(axis=1)) 
 diff_metrics = diff_metrics.sort_values(by="Overall_Score", ascending=False)
-print(diff_metrics[["MAE_Score", "MSE_Score", "R2_Score"]])
+print(diff_metrics[["MAE_Score", "RMSE_Score"]])
 print(diff_metrics["Overall_Score"])
 
-# TEST 
+"""# TEST 
 diff_metrics_TEST["Overall_Score"] = (diff_metrics_TEST[["MAE_Score", "MSE_Score", "R2_Score"]].mean(axis=1))
 diff_metrics_TEST = diff_metrics_TEST.sort_values(by="Overall_Score")
-print(diff_metrics_TEST["Overall_Score"])
+print(diff_metrics_TEST["Overall_Score"])"""
 
 # Add the test to diff_metrics
-test_overall_score = diff_metrics_TEST["Overall_Score"].iloc[0] 
+#test_overall_score = diff_metrics_TEST["Overall_Score"].iloc[0] 
 
 # Append a new row to diff_metrics with the label "TEST" and the overall score value.
-new_row = pd.DataFrame({"Overall_Score": [test_overall_score]}, index=["TEST (Models trained with real data)"])
-diff_metrics = pd.concat([diff_metrics, new_row])
+#new_row = pd.DataFrame({"Overall_Score": [test_overall_score]}, index=["TEST (Models trained with real data)"])
+#diff_metrics = pd.concat([diff_metrics, new_row])
 
 # Visualize the rank
 fig, ax = plt.subplots(1,1,figsize=(12,6))

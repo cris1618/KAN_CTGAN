@@ -71,7 +71,7 @@ class HybridEncoder(Module):
                               base_activation=base_activation,
                               grid_eps=grid_eps,
                               grid_range=grid_range),
-                    ReLU()
+                    nn.SiLU() # SiLU for KAN
                 ]
             else:
                 layers += [
@@ -132,7 +132,7 @@ class HybridDecoder(Module):
                               base_activation=base_activation,
                               grid_eps=grid_eps,
                               grid_range=grid_range),
-                    ReLU()
+                    nn.SiLU() # SiLU for KAN
                 ]
             else:
                 layers += [

@@ -90,7 +90,7 @@ class Discriminator_KAN(Module):
                           scale_spline=scale_spline,
                           base_activation=base_activation, grid_eps=grid_eps,
                           grid_range=grid_range),
-                LeakyReLU(0.2),
+                torch.nn.SiLU(0.2), # Better for KAN, LeakyReLU replaced
                 Dropout(0.5)
             ]
             dim = item

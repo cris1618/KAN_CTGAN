@@ -48,15 +48,20 @@ class Residual(Module):
         out = self.relu(out)
         return torch.cat([out, input_], dim=1)
 
-# Define KANResidual (*)
-class KANResidual(Module):
-    def __init__(self, in_dim, out_dim, **kan_kwargs):
+# Define ResidualKAN (*)
+class ResidualKAN(Module):
+    "KAN residual layer"
+    def __init__(self, i, o, grid_size=5, spline_order=3, scale_noise=0.1, scale_base=1.0,
+                 scale_spline=1.0, base_activation=torch.nn.SiLU, grid_eps=0.02, grid_range=[-1,1]):
         super().__init__()
-        self.fc   = KANLinear(in_dim, out_dim, **kan_kwargs)
-        self.bn   = BatchNorm1d(out_dim)
-        self.act  = LeakyReLU(0.2)
+        self.kan = KANLinear(i, o, grid_size=grid_size, spline_order=spline_order, scale_noise=scale_noise, scale_base=scale_base,
+                            scale_spline=scale_spline, base_activation=base_activation, grid_eps=grid_eps, grid_range=grid_range)
+        self.bn = BatchNorm1d(o)
+        self.act = torch.nn.SiLU() # Different from CTGAN, Preserving suggestion from KAN original paper
     def forward(self, x):
-        out = self.act(self.bn(self.fc(x)))
+        out = self.kan(x)
+        out = self.bn(out)
+        out = self.act(out)
         return torch.cat([out, x], dim=1)
 
 # HYBRID GENERATOR (*)
@@ -79,13 +84,21 @@ class HybridGenerator(Module):
         super(HybridGenerator, self).__init__()
         layers = []
         dim = embedding_dim
-        for i, out in enumerate(generator_dim):
+        for i, item in enumerate(generator_dim):
             if i == kan_layer_idx:
-                layers.append(KANResidual(dim, out))
-                dim = dim + out
+                layers.append(ResidualKAN(dim, item, 
+                                          grid_size=grid_size, 
+                                          spline_order=spline_order, 
+                                          scale_noise=scale_noise, 
+                                          scale_base=scale_base,
+                                          scale_spline=scale_spline, 
+                                          base_activation=base_activation, 
+                                          grid_eps=grid_eps, 
+                                          grid_range=grid_range))
+                dim += item
             else:
-                layers.append(Residual(dim, out))
-                dim = dim + out
+                layers.append(Residual(dim, item))
+                dim += item
         layers.append(nn.Linear(dim, data_dim))
         self.net = nn.Sequential(*layers)
           
@@ -106,15 +119,16 @@ class HybridDiscriminator(Module):
                  scale_spline=1.0, base_activation=torch.nn.SiLU, grid_eps=0.02, grid_range=[-1,1]):
         super(HybridDiscriminator, self).__init__()
         # Compute the effective input dimension after applying the pac trick (as in the original CTGAN discriminator)
+        dim = input_dim * pac
         self.pac = pac
-        in_dim = input_dim * pac
+        self.pacdim = dim
         layers = []
 
         for i, out_dim in enumerate(discriminator_dim):
             if i == kan_layer_idx:
                 layers.append(nn.Sequential(
                     KANLinear(
-                            in_dim, out_dim,
+                            dim, out_dim,
                             grid_size=grid_size,
                             spline_order=spline_order,
                             scale_noise=scale_noise,
@@ -124,21 +138,21 @@ class HybridDiscriminator(Module):
                             grid_eps=grid_eps,
                             grid_range=grid_range
                         ),
-                        nn.LeakyReLU(0.2),
+                        nn.SiLU(0.2), # Better for KAN
                         nn.Dropout(0.5)
                 ))
             else:
                 layers.append(
                     nn.Sequential(
-                        nn.Linear(in_dim, out_dim),
+                        nn.Linear(dim, out_dim),
                         nn.LeakyReLU(0.2),
                         nn.Dropout(0.5)
                     )
                 )
-            in_dim = out_dim
+            dim = out_dim
         
         # Final plain linear to a logit
-        layers.append(nn.Linear(in_dim, 1))
+        layers.append(nn.Linear(dim, 1))
         self.seq = nn.Sequential(*layers)
 
     # Calculate Gradient Penalty (Exact same as in the original implementation)
@@ -168,11 +182,8 @@ class HybridDiscriminator(Module):
 
     def forward(self, input_):
         """Apply the HybridDiscriminator to the `input_`."""
-        B, F = input_.shape # Batch size and num features
-        assert B % self.pac == 0
-        x = input_.view(-1, self.pac * F)
-        return self.seq(x)
-
+        assert input_.size()[0] % self.pac == 0
+        return self.seq(input_.view(-1, self.pacdim))
 
 # Change Name (*)
 class KAN_HYBRID_CTGAN(BaseSynthesizer):
