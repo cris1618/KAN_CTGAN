@@ -14,26 +14,48 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
-from Utilities import overall_similarity, evaluate_all_models
+from Utilities import overall_similarity, evaluate_all_models, visualize_reg_score
 
-"""# Import the data 
-real_df = pd.read_csv("TestDatasets/energydata_complete.csv")
-# real_df = pd.read_csv("TestDatasets/news.csv") # TARGET COLUMN: shares
-synthetic_df_STANDARD_CTGAN = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_STANDARD_CTGAN.csv")
-synthetic_df_KAN_CTGAN = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_KAN_CTGAN.csv")
-synthetc_df_HYBRID_CTGAN = pd.read_csv("TestDatasets/EnergySynthetic/synthetic_df_Hybrid_CTGAN.csv")
+# Import the data 
+#real_df = pd.read_csv("TestDatasets/energydata_complete.csv")
+#real_df = pd.read_csv("TestDatasets/news.csv", skipinitialspace=True)
+#real_df = pd.read_csv("TestDatasets/benjing.csv") # target: pm2.5
+real_df = pd.read_csv("TestDatasets/bike.csv") # target: cnt
 
+# Drop missing
+real_df = real_df.dropna()
+
+# Only for news dataset
+#real_df = real_df.drop(["url"], axis=1)
+
+# Only for bike dataset
+real_df = real_df.drop(["instant", "dteday"], axis=1)
+
+#real_df = real_df.drop(["date"], axis=1)
+#real_df = real_df.drop(["No"], axis=1)
+
+synthetic_df_STANDARD_CTGAN = pd.read_csv("TestDatasets/BikeSynthetic/synthetic_df_STANDARD_CTGAN.csv")
+synthetic_df_KAN_CTGAN = pd.read_csv("TestDatasets/BikeSynthetic/synthetic_df_KAN_CTGAN.csv")
+synthetc_df_HYBRID_CTGAN = pd.read_csv("TestDatasets/BikeSynthetic/synthetic_df_Hybrid_CTGAN.csv")
+synthetic_df_Disc_KAN_CTGAN = pd.read_csv("TestDatasets/BikeSynthetic/synthetic_df_Disc_KAN_CTGAN.csv")
+synthetic_df_Gen_KAN_CTGAN = pd.read_csv("TestDatasets/BikeSynthetic/synthetic_df_Gen_KAN_CTGAN.csv")
+
+# Debug
+print(real_df.columns.tolist())
+print(synthetic_df_KAN_CTGAN.columns.tolist())
 
 # Evaluate the Predictive Efficacy
-real_df = real_df.drop("date", axis=1)
+"""real_df = real_df.drop("date", axis=1)
 synthetic_df_STANDARD_CTGAN = synthetic_df_STANDARD_CTGAN.drop("date", axis=1)
 synthetic_df_KAN_CTGAN = synthetic_df_KAN_CTGAN.drop("date", axis=1)
 synthetc_df_HYBRID_CTGAN = synthetc_df_HYBRID_CTGAN.drop("date", axis=1)
+synthetic_df_Disc_KAN_CTGAN = synthetic_df_Disc_KAN_CTGAN.drop("date", axis=1)
+synthetic_df_Gen_KAN_CTGAN = synthetic_df_Gen_KAN_CTGAN.drop("date", axis=1)"""
 
 # Split the real dataset in two random subsets (TO TEST THE FUNCTION)
 real_data_part_1, real_data_part_2 = train_test_split(real_df, test_size=0.5, random_state=1618)
 
-# Evaluate the two parts on the statistical function
+# Evaluate the two parts on the statistical function (NOT USED AS A BENCHMARK IN THE THESIS)
 sim_score_test = overall_similarity(real_data_part_1, real_data_part_2)
 print(f"Similarity score: {sim_score_test}")
 
@@ -46,25 +68,41 @@ print("Similarity between real data and synthetic data with KAN CTGAN: ", sim_sc
 sim_score_HYBRID_CTGAN = overall_similarity(real_df, synthetc_df_HYBRID_CTGAN)
 print("Similarity between real data and synthetic data with HYBRID KAN CTGAN: ", sim_score_HYBRID_CTGAN)
 
+sim_score_Disc_KAN_CTGAN = overall_similarity(real_df, synthetic_df_Disc_KAN_CTGAN)
+print("Similarity between real data and synthetic data with DISC KAN CTGAN: ", sim_score_Disc_KAN_CTGAN)
+
+sim_score_Gen_KAN_CTGAN = overall_similarity(real_df, synthetic_df_Gen_KAN_CTGAN)
+print("Similarity between real data and synthetic data with Gen KAN CTGAN: ", sim_score_Gen_KAN_CTGAN)
+
 # Evaluate the ML efficacy
 # Divide all dataframes in training and targets
-X_real = real_df.drop(["Appliances"], axis=1)
-y_real = real_df["Appliances"]
+target_column = "cnt"
+X_real = real_df.drop([target_column], axis=1)
+y_real = real_df[target_column]
 
-X_STANDARD_CTGAN = synthetic_df_STANDARD_CTGAN.drop(["Appliances"], axis=1)
-y_STANDARD_CTGAN = synthetic_df_STANDARD_CTGAN["Appliances"]
+X_STANDARD_CTGAN = synthetic_df_STANDARD_CTGAN.drop([target_column], axis=1)
+y_STANDARD_CTGAN = synthetic_df_STANDARD_CTGAN[target_column]
 
-X_KAN_CTGAN = synthetic_df_KAN_CTGAN.drop(["Appliances"], axis=1)
-y_KAN_CTGAN = synthetic_df_KAN_CTGAN["Appliances"]
+X_KAN_CTGAN = synthetic_df_KAN_CTGAN.drop([target_column], axis=1)
+y_KAN_CTGAN = synthetic_df_KAN_CTGAN[target_column]
 
-X_HYBRID_KAN_CTGAN = synthetc_df_HYBRID_CTGAN.drop(["Appliances"], axis=1)
-y_HYBRID_KAN_CTGAN = synthetc_df_HYBRID_CTGAN["Appliances"]
+X_HYBRID_KAN_CTGAN = synthetc_df_HYBRID_CTGAN.drop([target_column], axis=1)
+y_HYBRID_KAN_CTGAN = synthetc_df_HYBRID_CTGAN[target_column]
+
+X_DISC_KAN_CTGAN = synthetic_df_Disc_KAN_CTGAN.drop([target_column], axis=1)
+y_DISC_KAN_CTGAN = synthetic_df_Disc_KAN_CTGAN[target_column]
+
+X_GEN_KAN_CTGAN = synthetic_df_Gen_KAN_CTGAN.drop([target_column], axis=1)
+y_GEN_KAN_CTGAN = synthetic_df_Gen_KAN_CTGAN[target_column]
+
 
 # Create a dictionary for the synthetic data and one for the ML models that will be used
 synthetic_datasets = {
     "STANDARD CTGAN": (X_STANDARD_CTGAN, y_STANDARD_CTGAN),
     "KAN CTGAN": (X_KAN_CTGAN, y_KAN_CTGAN),
-    "HYBRID KAN CTGAN": (X_HYBRID_KAN_CTGAN, y_HYBRID_KAN_CTGAN)
+    "HYBRID KAN CTGAN": (X_HYBRID_KAN_CTGAN, y_HYBRID_KAN_CTGAN),
+    "DISC KAN CTGAN": (X_DISC_KAN_CTGAN, y_DISC_KAN_CTGAN),
+    "GEN KAN CTGAN": (X_GEN_KAN_CTGAN, y_GEN_KAN_CTGAN)
 }
 
 models = {
@@ -82,132 +120,24 @@ models = {
 # Create fake dictionary
 real_data_dict = {
     "Real_Data": (X_real, y_real)
-}"""
+}
 
-"""# Evaluate function
-# THIS IS TO PROVE THAT IF THE TRAINING DATA ARE VERY SIMILAR (BOTH REAL) THEN THE PERFORMANCE WILL BE ALMOST IDENTICAL
-real_metric_1, real_metric_2, _ = evaluate_all_models(X_real, y_real, real_data_dict, models, test_size=0.2, random_state=1618, repeats=5)
-real_metric_2.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/TEST_EQUAL_TO_REAL.csv", index=False)
-print(real_metric_1.mean()[["MAE", "MSE", "R2"]])
-print(real_metric_2.head())"""
-
-"""# Create the metrics datasets
+# Create the metrics datasets
 print("Start Evaluation")
 real_metrics_df, overall_syn_metrics_df, detailed_syn_metrics = evaluate_all_models(X_real, y_real, synthetic_datasets, models, test_size=0.2, random_state=1618, repeats=10)
 
-real_metrics_df.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/real_metrics.csv", index=False)
-overall_syn_metrics_df.to_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/overall_syn_metrics.csv", index=False)
+print("Saving CSVs")
+real_metrics_df.to_csv("TestDatasets/BikeSynthetic/SyntheticPerformance/real_metrics.csv", index=False)
+overall_syn_metrics_df.to_csv("TestDatasets/BikeSynthetic/SyntheticPerformance/overall_syn_metrics.csv", index=False)
 print(real_metrics_df.head())
 print(overall_syn_metrics_df.head())
-print(detailed_syn_metrics)"""
+print("Done")
 
 # Import the datasets with performances (Regression)
 real_metrics_df = pd.read_csv("TestDatasets/BikeSynthetic/SyntheticPerformanceFromCluster/real_metrics.csv")
 overall_syn_metrics_df = pd.read_csv("TestDatasets/BikeSynthetic/SyntheticPerformanceFromCluster/overall_syn_metrics.csv")
-#TEST = pd.read_csv("TestDatasets/EnergySynthetic/SyntheticPerformance/SyntheticPerformanceFromCluster/TEST_EQUAL_TO_REAL.csv")
-
-# Create diff metrics to store the differences in performance from the original data
-# Compute the differences
-diff_metrics = overall_syn_metrics_df.copy()
-#diff_metrics_TEST = TEST.copy()
-
-# Calculate RMSE 
-overall_syn_metrics_df["RMSE_avg"] = np.sqrt(overall_syn_metrics_df["MSE_avg"])
-real_rmse = np.sqrt(real_metrics_df.mean()["MSE"])
-
-# Compute the difference is RMSE
-diff_metrics["Delta_RMSE"] = abs(real_rmse - overall_syn_metrics_df["RMSE_avg"])
-
-# Absolute difference
-for metric in ["MAE"]:
-    diff_metrics[f"Delta_{metric}"] = abs(real_metrics_df.mean()[metric] - overall_syn_metrics_df[f"{metric}_avg"])
-
-# Normalize the scores
-real_mae = real_metrics_df.mean()["MAE"]
-
-diff_metrics["MAE_Score"] = 1 - (diff_metrics["Delta_MAE"] / real_mae)
-diff_metrics["RMSE_Score"] = 1 - (diff_metrics["Delta_RMSE"] / real_rmse)
-
-
-"""# TEST
-for metric in ["MAE", "MSE", "R2"]:
-    diff_metrics_TEST[f"Delta_TEST_{metric}"] = abs(real_metrics_df.mean()[metric] - TEST[f"{metric}_avg"])"""
-
-"""# Percentages, relative difference
-for metric in ["MAE", "MSE"]:
-    diff_metrics[f"Real_Delta_{metric} (%)"] = (diff_metrics[f"Delta_{metric}"] / (real_metrics_df.mean()[metric])) * 100"""
-
-"""# TEST 
-for metric in ["MAE", "MSE"]:
-    diff_metrics_TEST[f"Real_Delta_TEST_{metric} (%)"] = (diff_metrics_TEST[f"Delta_TEST_{metric}"] / (real_metrics_df.mean()[metric])) * 100"""
-
-"""# For R2 the difference is simplier since it's already a percentage
-diff_metrics["Real_Delta_R2 (%)"] = (diff_metrics["Delta_R2"] / (real_metrics_df.mean()["R2"])) * 100 # CHECK HERE"""
-
-# TEST
-#diff_metrics_TEST["Real_Delta_TEST_R2 (%)"] = (diff_metrics_TEST["Delta_TEST_R2"] / (real_metrics_df.mean()["R2"])) * 100 
 
 model_names = ["Standard CTGAN", "KAN CTGAN", "Hybrid KAN CTGAN", "DISC KAN CTGAN", "GEN KAN CTGAN"]
-diff_metrics.index = model_names
 
-print(diff_metrics)
-
-"""# Calculate the scores
-diff_metrics["MAE_Score"] = 1 - (diff_metrics["Delta_MAE"] / real_metrics_df.mean()["MAE"]) 
-diff_metrics["MSE_Score"] = 1 - (diff_metrics["Delta_MSE"] / real_metrics_df.mean()["MSE"])
-diff_metrics["R2_Score"] = 1 - (diff_metrics["Delta_R2"] / real_metrics_df.mean()["R2"])"""
-
-"""# TEST
-diff_metrics_TEST["MAE_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_MAE"] / real_metrics_df.mean()["MAE"])
-diff_metrics_TEST["MSE_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_MSE"] / real_metrics_df.mean()["MSE"])
-diff_metrics_TEST["R2_Score"] = 1 - (diff_metrics_TEST["Delta_TEST_R2"] / real_metrics_df.mean()["R2"])
-print(diff_metrics_TEST)"""
-
-
-# Creating a overall score (since now MAE_Score, RMSE_Score and R2_Score are in the same range (-inf, 1])
-diff_metrics["Overall_Score"] = (diff_metrics[["MAE_Score", "RMSE_Score"]].mean(axis=1)) 
-diff_metrics = diff_metrics.sort_values(by="Overall_Score", ascending=False)
-print(diff_metrics[["MAE_Score", "RMSE_Score"]])
-print(diff_metrics["Overall_Score"])
-
-"""# TEST 
-diff_metrics_TEST["Overall_Score"] = (diff_metrics_TEST[["MAE_Score", "MSE_Score", "R2_Score"]].mean(axis=1))
-diff_metrics_TEST = diff_metrics_TEST.sort_values(by="Overall_Score")
-print(diff_metrics_TEST["Overall_Score"])"""
-
-# Add the test to diff_metrics
-#test_overall_score = diff_metrics_TEST["Overall_Score"].iloc[0] 
-
-# Append a new row to diff_metrics with the label "TEST" and the overall score value.
-#new_row = pd.DataFrame({"Overall_Score": [test_overall_score]}, index=["TEST (Models trained with real data)"])
-#diff_metrics = pd.concat([diff_metrics, new_row])
-
-# Visualize the rank
-fig, ax = plt.subplots(1,1,figsize=(12,6))
-bars = ax.bar(diff_metrics.index, diff_metrics["Overall_Score"], color="green", edgecolor="black")
-
-for bar in bars:
-    height = bar.get_height()
-    if height >= 0:
-        ax.text(bar.get_x() + bar.get_width() / 2.,
-                height + 0.02,
-                f"{height:.2f}",
-                ha="center", va="bottom",
-                fontsize=10, fontweight="bold")
-    else:
-        ax.text(bar.get_x() + bar.get_width() / 2.,
-                height - 0.02,
-                f"{height:.2f}",
-                ha="center", va="top",
-                fontsize=10, fontweight="bold")
-
-ax.set_title("Overall Performance of Synthetic Data Generators")
-ax.set_ylabel("Overall Score (Better if closer to 1)")
-ax.set_xlabel("Synthetic Data Generator")
-ax.set_xticklabels(diff_metrics.index, rotation=0)
-ax.spines["top"].set_visible(False)
-ax.spines["right"].set_visible(False)
-ax.grid(axis="y", linestyle="--", alpha=0.7)
-plt.show()
-
+visualize_reg_score(real_metrics_df, overall_syn_metrics_df, model_names)
 

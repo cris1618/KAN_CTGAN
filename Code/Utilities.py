@@ -1,20 +1,13 @@
 import pandas as pd
 import numpy as np
-import os
 import matplotlib.pyplot as plt
-import seaborn as sns
-import torch 
 from scipy.stats import ks_2samp, wasserstein_distance
 from sklearn.base import clone
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
-from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
-from sklearn.linear_model import LinearRegression
-from sklearn.svm import SVR
 
 # Import comparisons functions
 def overall_similarity(real_df, synthetic_df, 
@@ -286,3 +279,145 @@ def evaluate_all_models_classification(X_real, y_real, synthetic_datasets, model
     overall_syn_metrics_df = pd.DataFrame.from_dict(overall_syn, orient="index")
 
     return real_metrics_df, overall_syn_metrics_df
+
+def visualize_reg_score(real_metrics_df, overall_syn_metrics_df, model_names):
+    """
+    Visualize regression performance of synthetic data generators using MAE and RMSE as reference.
+
+    This function compares regression metrics between real and synthetic datasets, computes 
+    delta values for MAE and RMSE, transforms them into normalized scores, and produces an 
+    overall performance score for each model. Results are visualized in a bar chart.
+
+    Parameters:
+    - real_metrics_df (pd.DataFrame): Regression metrics from the real dataset (containing "MAE", "MSE" columns).
+    - overall_syn_metrics_df (pd.DataFrame): Regression metrics averaged over synthetic datasets (must include "MAE_avg", "MSE_avg").
+    - model_names (list of str): List of model names to assign as index for plotting.
+
+    Returns:
+    - None: Displays a bar plot with the overall score for each synthetic data generator.
+    """
+
+    # Create diff metrics to store the differences in performance from the original data
+    # Compute the differences
+    diff_metrics = overall_syn_metrics_df.copy()
+
+    # Calculate RMSE 
+    overall_syn_metrics_df["RMSE_avg"] = np.sqrt(overall_syn_metrics_df["MSE_avg"])
+    real_rmse = np.sqrt(real_metrics_df.mean()["MSE"])
+
+    # Compute the difference is RMSE
+    diff_metrics["Delta_RMSE"] = abs(real_rmse - overall_syn_metrics_df["RMSE_avg"])
+
+    # Absolute difference
+    for metric in ["MAE"]:
+        diff_metrics[f"Delta_{metric}"] = abs(real_metrics_df.mean()[metric] - overall_syn_metrics_df[f"{metric}_avg"])
+
+    # Normalize the scores
+    real_mae = real_metrics_df.mean()["MAE"]
+
+    diff_metrics["MAE_Score"] = 1 - (diff_metrics["Delta_MAE"] / real_mae)
+    diff_metrics["RMSE_Score"] = 1 - (diff_metrics["Delta_RMSE"] / real_rmse)
+
+    diff_metrics.index = model_names
+
+    print(diff_metrics)
+
+    # Creating a overall score (since now MAE_Score, RMSE_Score and R2_Score are in the same range (-inf, 1])
+    diff_metrics["Overall_Score"] = (diff_metrics[["MAE_Score", "RMSE_Score"]].mean(axis=1)) 
+    diff_metrics = diff_metrics.sort_values(by="Overall_Score", ascending=False)
+    print(diff_metrics[["MAE_Score", "RMSE_Score"]])
+    print(diff_metrics["Overall_Score"])
+
+    # Visualize the rank
+    fig, ax = plt.subplots(1,1,figsize=(12,6))
+    bars = ax.bar(diff_metrics.index, diff_metrics["Overall_Score"], color="green", edgecolor="black")
+
+    for bar in bars:
+        height = bar.get_height()
+        if height >= 0:
+            ax.text(bar.get_x() + bar.get_width() / 2.,
+                    height + 0.02,
+                    f"{height:.2f}",
+                    ha="center", va="bottom",
+                    fontsize=10, fontweight="bold")
+        else:
+            ax.text(bar.get_x() + bar.get_width() / 2.,
+                    height - 0.02,
+                    f"{height:.2f}",
+                    ha="center", va="top",
+                    fontsize=10, fontweight="bold")
+
+    ax.set_title("Overall Performance of Synthetic Data Generators")
+    ax.set_ylabel("Overall Score (Better if closer to 1)")
+    ax.set_xlabel("Synthetic Data Generator")
+    ax.set_xticklabels(diff_metrics.index, rotation=0)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(axis="y", linestyle="--", alpha=0.7)
+    plt.show()
+
+def visualize_class_score(real_metrics_df_class, overall_syn_metrics_df_class, model_names):
+    """
+    Visualize classification performance of synthetic data generators using Accuracy, Precision, Recall, and F1.
+
+    This function compares classification metrics between real and synthetic datasets, computes 
+    delta values, derives normalized per-metric scores, and calculates an overall score 
+    reflecting similarity to real-data performance. Outputs are visualized in a bar chart.
+
+    Parameters:
+    - real_metrics_df_class (pd.DataFrame): Classification metrics from the real dataset (single-row DataFrame).
+    - overall_syn_metrics_df_class (pd.DataFrame): Average classification metrics over synthetic datasets.
+    - model_names (list of str): List of model names to use as index for visualization.
+
+    Returns:
+    - None: Displays a bar plot with the overall classification score for each synthetic model.
+    """
+
+    # Create diff metrics to store the differences in performance from the original data
+    # Compute the differences
+    diff = overall_syn_metrics_df_class.copy()
+    for metric in diff.columns:
+        diff[f"Delta_{metric}"] = abs(real_metrics_df_class.at[0, metric] - diff[metric])
+
+    # Compute per-metric score = 1 - (delta/real)
+    for metric in diff.columns:
+        if metric.startswith("Delta_"):
+            base = real_metrics_df_class.at[0, metric.replace("Delta_", "")]
+            diff[f"{metric.replace('Delta_', '')} Score"] = 1 - (diff[metric] / base)
+
+    # Overall score
+    score_cols = [c for c in diff.columns if c.endswith("Score")]
+    diff["Overall_Score"] = diff[score_cols].mean(axis=1)
+    print(diff["Overall_Score"])
+
+    diff.index = model_names
+
+    # Visualize the rank
+    fig, ax = plt.subplots(1,1,figsize=(12,6))
+    bars = ax.bar(diff.index, diff["Overall_Score"], color="green", edgecolor="black")
+
+    for bar in bars:
+        height = bar.get_height()
+        if height >= 0:
+            ax.text(bar.get_x() + bar.get_width() / 2.,
+                    height + 0.02,
+                    f"{height:.2f}",
+                    ha="center", va="bottom",
+                    fontsize=10, fontweight="bold")
+        else:
+            ax.text(bar.get_x() + bar.get_width() / 2.,
+                    height - 0.02,
+                    f"{height:.2f}",
+                    ha="center", va="top",
+                    fontsize=10, fontweight="bold")
+
+    ax.set_title("Overall Performance of Synthetic Data Generators")
+    ax.set_ylabel("Overall Score (Better if closer to 1)")
+    ax.set_xlabel("Synthetic Data Generator")
+    ax.set_xticklabels(diff.index, rotation=0)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(axis="y", linestyle="--", alpha=0.7)
+    plt.show()
+
+
