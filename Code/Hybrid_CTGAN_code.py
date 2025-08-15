@@ -1,19 +1,25 @@
-## CODE FROM: https://github.com/sdv-dev/CTGAN/blob/main/ctgan/synthesizers/ctgan.py
-
-## Changes in the original code will be segnalated with proper comments and the symbol (*)
-
 """
-This file is a modified version of the original CTGAN implementation:
+Hybrid_CTGAN_code.py
+
+Modified CTGAN Implementation with a Hybrid Kolmogorov–Arnold Network (KAN) architecture.
+
+This file is based on the original CTGAN implementation from:
 https://github.com/sdv-dev/CTGAN/blob/main/ctgan/synthesizers/ctgan.py
 
-The only substantive change is that the generator and discriminator—
-which were originally MLPs—have been replaced with Kolmogorov–Arnold Networks.
-All other code and documentation remain unchanged.
+Main Modifications (*):
+- Replaced a single Residual block in the Generator with a KAN-based residual layer.
+- Replaced one Linear block in the Discriminator with a KANLinear block.
+- Added flexible control over the position of the KAN layer via `kan_layer_idx`.
+- Introduced KAN-specific hyperparameters (e.g., grid size, spline order).
+- Adjusted activation and normalization to align with KAN principles.
 
-For the original CTGAN design, see:
-    Xu, L., Nightingale, A., & Krishnan, R. (2019).
-    Modeling Tabular Data Using Conditional GAN.
-    https://arxiv.org/abs/1907.00503
+All other logic, structure, and function docstrings have been retained from the original source,
+unless explicitly noted otherwise. Any line or block marked with (*) indicates a user-introduced
+modification to the original CTGAN codebase.
+
+For reference on CTGAN:
+Xu, L., Nightingale, A., & Krishnan, R. (2019). Modeling Tabular Data Using Conditional GAN.
+https://arxiv.org/abs/1907.00503
 """
 
 import warnings
@@ -22,14 +28,14 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from torch import optim
-from torch.nn import BatchNorm1d, Dropout, LeakyReLU, Linear, Module, ReLU, Sequential, functional
+from torch.nn import BatchNorm1d, Linear, Module, ReLU, Sequential, functional
 from tqdm import tqdm
 from ctgan.data_sampler import DataSampler
 from ctgan.data_transformer import DataTransformer
 from ctgan.errors import InvalidDataError
 from ctgan.synthesizers.base import BaseSynthesizer, random_state
 
-# Import KAN (*)
+# (*) Additional import for Kolmogorov–Arnold Networks
 from KAN_code import KAN, KANLinear
 
 class Residual(Module):
@@ -48,7 +54,7 @@ class Residual(Module):
         out = self.relu(out)
         return torch.cat([out, input_], dim=1)
 
-# Define ResidualKAN (*)
+# (*) New residual KAN layer used in the Generator
 class ResidualKAN(Module):
     "KAN residual layer"
     def __init__(self, i, o, grid_size=5, spline_order=3, scale_noise=0.1, scale_base=1.0,
@@ -64,23 +70,33 @@ class ResidualKAN(Module):
         out = self.act(out)
         return torch.cat([out, x], dim=1)
 
-# HYBRID GENERATOR (*)
+# (*) Custom Hybrid Generator implementation using KAN layers
 class HybridGenerator(Module):
     """
-    CTGAN Generator with a single KAN block at layer 'kan_layer_idx',
-    the rest remain as standard CTGAN Residuals.
+    Generator for Hybrid-CTGAN with one Kolmogorov–Arnold Network (KAN) layer.
+
+    This generator modifies the original CTGAN architecture by introducing a single
+    KAN-based residual block at a specified layer index (`kan_layer_idx`). All other 
+    layers remain standard residual blocks (Linear + BatchNorm + ReLU), as in the 
+    original CTGAN implementation.
+
+    Args:
+        embedding_dim (int): Dimension of the input noise vector (z) + conditional vector.
+        generator_dim (list of int): List of hidden layer sizes, one per residual block.
+        data_dim (int): Output dimension (number of features to synthesize).
+        kan_layer_idx (int): Index at which to insert the KAN residual block (default: 0).
+        grid_size (int): Number of grid intervals per feature (KAN-specific).
+        spline_order (int): Degree of the spline basis (KAN-specific).
+        scale_noise (float): Noise scaling factor for KAN (default: 0.1).
+        scale_base (float): Base scaling factor for KAN (default: 1.0).
+        scale_spline (float): Spline scaling factor for KAN (default: 1.0).
+        base_activation (callable): Activation function to use (default: torch.nn.SiLU).
+        grid_eps (float): Epsilon to avoid zero-width grid spacing.
+        grid_range (list): Lower and upper bounds for the grid used in KAN.
     """
     def __init__(self, embedding_dim, generator_dim, data_dim, kan_layer_idx=0, grid_size=5, spline_order=3,
                  scale_noise=0.1, scale_base=1.0, scale_spline=1.0, base_activation=torch.nn.SiLU,
                  grid_eps=0.02, grid_range=[-1, 1]):
-        """
-        Arguments:
-        - embedding_dim (int): Input dimension (noise + conditional vector).
-        - generator_dim (list or tuple of int): List of hidden layer sizes.
-        - data_dim (int): Output dimension, i.e. the number of synthetic features.
-        - kan_layer_idx (int): Index of the hidden layer to swap in KAN for.
-        - grid_size, spline_order, etc.: Hyperparameters for the KAN layers. 
-        """
         super(HybridGenerator, self).__init__()
         layers = []
         dim = embedding_dim
@@ -108,12 +124,33 @@ class HybridGenerator(Module):
         """
         return self.net(x)
 
-# HYBRID DISCRIMINATOR (critic)(*)
+# (*) Custom Hybrid Discriminator implementation using KAN layers
 class HybridDiscriminator(Module):
     """
-    CTGAN Discriminator with exactly one KANLinear block,
-    everything else stays as standard Linear + LeakyReLU + Dropout.
-    """   
+    Discriminator for Hybrid-CTGAN with one Kolmogorov–Arnold Network (KAN) layer.
+
+    This discriminator modifies the CTGAN discriminator by inserting a single 
+    KANLinear layer at the specified index (`kan_layer_idx`). The rest of the 
+    layers remain standard Linear + LeakyReLU + Dropout blocks, preserving the 
+    original discriminator structure.
+
+    The discriminator uses PACGAN-style grouping, multiplying the input dimension
+    by `pac` to increase stability against mode collapse.
+
+    Args:
+        input_dim (int): Input feature dimension (after transformation).
+        discriminator_dim (list of int): List of hidden layer sizes.
+        pac (int): Number of samples grouped together for PACGAN (default: 10).
+        kan_layer_idx (int): Index at which to insert the KANLinear layer.
+        grid_size (int): Number of grid intervals per feature (KAN-specific).
+        spline_order (int): Degree of the spline basis (KAN-specific).
+        scale_noise (float): Noise scaling factor for KAN (default: 0.1).
+        scale_base (float): Base scaling factor for KAN (default: 1.0).
+        scale_spline (float): Spline scaling factor for KAN (default: 1.0).
+        base_activation (callable): Activation function to use (default: torch.nn.SiLU).
+        grid_eps (float): Epsilon to avoid zero-width grid spacing.
+        grid_range (list): Lower and upper bounds for the grid used in KAN.
+    """
     def __init__(self, input_dim, discriminator_dim, pac=10,
                  kan_layer_idx=0, grid_size=5, spline_order=3, scale_noise=0.1, scale_base=1.0,
                  scale_spline=1.0, base_activation=torch.nn.SiLU, grid_eps=0.02, grid_range=[-1,1]):
@@ -185,68 +222,54 @@ class HybridDiscriminator(Module):
         assert input_.size()[0] % self.pac == 0
         return self.seq(input_.view(-1, self.pacdim))
 
-# Change Name (*)
+# (*) Main CTGAN class override: uses Hybrid KAN Generator and Discriminator
 class KAN_HYBRID_CTGAN(BaseSynthesizer):
-    """Kalmogorov-Arnold Conditional Table GAN Synthesizer.
+    """
+    Kolmogorov–Arnold Hybrid Conditional Table GAN (Hybrid KAN-CTGAN) Synthesizer.
 
-    This is the core class of the KAN CTGAN project, where the different components
-    are orchestrated together.
+    This class implements a hybrid variation of the original CTGAN architecture
+    (https://github.com/sdv-dev/CTGAN), where only **one layer** in both the generator
+    and discriminator—originally based on MLPs—has been replaced with Kolmogorov–Arnold 
+    Network (KAN) blocks.
 
-    This class has been created by changing the generator and discriminator from the 
-    original CTGAN implementation. For more detail about the CTGAN itself please check 
-    the [Modeling Tabular data using Conditional GAN](https://arxiv.org/abs/1907.00503) paper.
+    Except for these hybrid architectural substitutions, all logic and components from the 
+    original CTGAN implementation are preserved. For a complete description of the 
+    original model, refer to:
+        Xu, L., Nightingale, A., & Krishnan, R. (2019).
+        "Modeling Tabular Data Using Conditional GAN".
+        https://arxiv.org/abs/1907.00503
 
-    The original code of the CTGAN (Without any modification) can be found in this GitHub 
-    repository: https://github.com/sdv-dev/CTGAN/blob/main/ctgan/synthesizers/ctgan.py
-
-    Note that almost all of the code remains unchanged from the original CTGAN version. 
-    The only major modification is substituting the generator and discriminator, originally 
-    implemented as MLPs, with a Kolmogorov-Arnold Network. The documentation for each function 
-    has likewise been left intact, except where changes were strictly necessary. 
+    Note:
+        - Only one hidden layer in the generator is replaced with a KANResidual block.
+        - Only one hidden layer in the discriminator is replaced with a KANLinear block.
+        - The specific KAN layer to substitute is chosen via `kan_layer_idx`.
+        - All other layers remain standard CTGAN (Residual + BatchNorm1d + ReLU in the generator;
+          Linear + LeakyReLU + Dropout in the discriminator).
+        - Conditional sampling, gradient penalty, and activation logic follow the original CTGAN.
 
     Args:
-        grid_size_gen (int): 
-        spline_order_gen (int): 
-        grid_size_desc (int): 
-        spline_order_desc (int):
-        embedding_dim (int):
-            Size of the random sample passed to the Generator. Defaults to 128.
-        generator_dim (tuple or list of ints):
-            Size of the output samples for each one of the Residuals. A Residual Layer
-            will be created for each one of the values provided. Defaults to (256, 256).
-        discriminator_dim (tuple or list of ints):
-            Size of the output samples for each one of the Discriminator Layers. A Linear Layer
-            will be created for each one of the values provided. Defaults to (256, 256).
-        generator_lr (float):
-            Learning rate for the generator. Defaults to 2e-4.
-        generator_decay (float):
-            Generator weight decay for the Adam Optimizer. Defaults to 1e-6.
-        discriminator_lr (float):
-            Learning rate for the discriminator. Defaults to 2e-4.
-        discriminator_decay (float):
-            Discriminator weight decay for the Adam Optimizer. Defaults to 1e-6.
-        batch_size (int):
-            Number of data samples to process in each step.
-        discriminator_steps (int):
-            Number of discriminator updates to do for each generator update.
-            From the WGAN paper: https://arxiv.org/abs/1701.07875. WGAN paper
-            default is 5. Default used is 1 to match original CTGAN implementation.
-        log_frequency (boolean):
-            Whether to use log frequency of categorical levels in conditional
-            sampling. Defaults to ``True``.
-        verbose (boolean):
-            Whether to have print statements for progress results. Defaults to ``False``.
-        epochs (int):
-            Number of training epochs. Defaults to 300.
-        pac (int):
-            Number of samples to group together when applying the discriminator.
-            Defaults to 10.
-        cuda (bool):
-            Whether to attempt to use cuda for GPU computation.
-            If this is False or CUDA is not available, CPU will be used.
-            Defaults to ``True``.
-    """
-     # (*) ADDED GRID SIZE AND SPLINE HYPERPARAMETERS FOR BOTH KAN GENERATOR AND KAN DISCRIMINATOR
+        embedding_dim (int): Dimension of the input noise vector (default: 128).
+        generator_dim (tuple of int): Hidden layer sizes in the generator (default: (256, 256)).
+        discriminator_dim (tuple of int): Hidden layer sizes in the discriminator (default: (256, 256)).
+        generator_lr (float): Learning rate for the generator optimizer (default: 2e-4).
+        generator_decay (float): Weight decay for the generator optimizer (default: 1e-6).
+        discriminator_lr (float): Learning rate for the discriminator optimizer (default: 2e-4).
+        discriminator_decay (float): Weight decay for the discriminator optimizer (default: 1e-6).
+        batch_size (int): Training batch size (default: 500).
+        discriminator_steps (int): Number of discriminator updates per generator update (default: 1).
+        log_frequency (bool): Whether to use log frequency in conditional sampling (default: True).
+        verbose (bool): Whether to print training progress (default: False).
+        epochs (int): Number of training epochs (default: 300).
+        pac (int): Number of samples grouped for PACGAN (default: 10).
+        cuda (bool or str): Use GPU if available, or specify device string (default: True).
+
+        # KAN-specific hyperparameters:
+        grid_size_gen (int): Grid size for the KAN generator layer (default: 5).
+        spline_order_gen (int): Spline order for the KAN generator layer (default: 3).
+        grid_size_desc (int): Grid size for the KAN discriminator layer (default: 5).
+        spline_order_desc (int): Spline order for the KAN discriminator layer (default: 3).
+    """    
+    # (*) Added KAN-specific hyperparameters
     def __init__(
         self,
         grid_size_gen=5,
@@ -433,7 +456,7 @@ class KAN_HYBRID_CTGAN(BaseSynthesizer):
             train_data, 
             discrete_columns=(), 
             epochs=None):
-        """Fit the Hybrid CTGAN Synthesizer models to the training data.
+        """Fit the KAN_Hybrid_CTGAN Synthesizer models to the training data.
 
         Args:
             train_data (numpy.ndarray or pandas.DataFrame):
@@ -469,7 +492,7 @@ class KAN_HYBRID_CTGAN(BaseSynthesizer):
 
         data_dim = self._transformer.output_dimensions
         
-        # CHANGE GENERATOR AND DISCRIMINATOR (*)
+        # (*) CHANGE GENERATOR AND DISCRIMINATOR
         self._generator = HybridGenerator(
             self._embedding_dim + self._data_sampler.dim_cond_vec(), self._generator_dim, data_dim,
             grid_size=self._grid_size_gen, spline_order=self._spline_order_gen
