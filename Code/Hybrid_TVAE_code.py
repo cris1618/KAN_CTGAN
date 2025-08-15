@@ -1,19 +1,28 @@
-## CODE FROM: https://github.com/sdv-dev/CTGAN/blob/main/ctgan/synthesizers/tvae.py
-
-## Changes in the original code will be segnalated with proper comments and the symbol (*)
-
 """
-This file is a modified version of the original TVAE implementation:
+Hybrid_TVAE_Code.py
+
+Hybrid TVAE Implementation with Partial Kolmogorov–Arnold Networks (KAN).
+
+This file is based on the original TVAE implementation from:
 https://github.com/sdv-dev/CTGAN/blob/main/ctgan/synthesizers/tvae.py
 
-The only substantive change is that the encoder and decoder—
-which were originally MLPs—have been replaced with Kolmogorov–Arnold Networks.
-All other code and documentation remain unchanged.
+Main Modifications (*):
+- Replaced one layer in the Encoder and Decoder (originally MLP-based) with KANLinear layers.
+- Introduced the ability to specify the position (`kan_layer_idx`) of the KAN block in both modules.
+- Maintained full compatibility with TVAE’s VAE loss (reconstruction + KL divergence).
+- Added support for KAN-specific hyperparameters such as grid size, spline order, and scaling factors.
 
-For the original CTGAN design, see:
-    Xu, L., Nightingale, A., & Krishnan, R. (2019).
-    Modeling Tabular Data Using Conditional GAN.
-    https://arxiv.org/abs/1907.00503
+This hybrid approach allows experimentation with partially KAN-based architectures,
+which may offer a trade-off between representational power and training stability.
+
+All other logic, structure, and function docstrings have been retained from the original source,
+unless explicitly noted otherwise. Any line or block marked with (*) indicates a user-introduced
+modification to the original TVAE codebase.
+
+For reference on TVAE:
+Xu, L., Skoularidou, M., Cuesta-Infante, A., & Veeramachaneni, K. (2019).
+Modeling Tabular Data using Conditional GAN. NeurIPS 2019.
+https://arxiv.org/abs/1907.00503
 """
 
 import numpy as np
@@ -29,26 +38,41 @@ from tqdm import tqdm
 from ctgan.data_transformer import DataTransformer
 from ctgan.synthesizers.base import BaseSynthesizer, random_state
 
-# Import KAN (*)
-from KAN_code import KAN, KANLinear
+# (*) Additional import for Kolmogorov–Arnold Networks
+from KAN_code import KANLinear
 
-# (*) KAN ENCODER
+# (*) Hybrid KAN ENCODER
 class HybridEncoder(Module):
-    """TVAE Ecoder with a single KAN block at layer 'kan_layer_idx',
-    the rest remain as standard TVAE Linear Layers.
+    """
+    Encoder module for Hybrid-KAN-TVAE.
+
+    This encoder introduces a hybrid architecture that combines standard MLP-based 
+    layers with a single Kolmogorov–Arnold Network (KAN) block at a configurable 
+    position (`kan_layer_idx`). The rest of the layers remain unchanged from the 
+    original TVAE encoder.
+
+    The encoder maps input tabular data into a latent space characterized by its 
+    mean and log-variance vectors. Only one of the intermediate layers is replaced 
+    with a spline-based KANLinear layer, which enables localized nonlinear 
+    approximation with grid-based flexibility.
+
+    This approach allows for partial integration of KAN components while retaining 
+    much of the simplicity and speed of the original MLP-based design.
 
     Args:
-        data_dim (int):
-            Dimensions of the data.
-        compress_dims (tuple or list of ints):
-            Size of each hidden layer.
-        embedding_dim (int):
-            Size of the output vector.
-        kan_layer_idx (int): index of KAN layer.
-        grid_size, spline_order, etc. (int): 
-            Hyperparameters for the KAN layers. 
+        data_dim (int): Dimensionality of the input data.
+        compress_dims (list or tuple of int): Sizes of the intermediate hidden layers.
+        embedding_dim (int): Dimensionality of the latent representation.
+        kan_layer_idx (int): Index of the encoder layer to be replaced with a KANLinear block.
+        grid_size (int): Number of grid points per input dimension in the KAN layer (default: 5).
+        spline_order (int): Order of the spline interpolation used in the KAN layer (default: 3).
+        scale_noise (float): Standard deviation of noise applied to the KAN spline component.
+        scale_base (float): Scaling factor for the base component in the KAN layer.
+        scale_spline (float): Scaling factor for the spline component in the KAN layer.
+        base_activation (torch.nn.Module): Activation function used for the KAN base component.
+        grid_eps (float): Small epsilon added for numerical stability during grid setup.
+        grid_range (list of float): Value range over which the KAN grid points are distributed.
     """
-
     def __init__(self, data_dim, compress_dims, embedding_dim, 
                  kan_layer_idx=0, grid_size=5, spline_order=3, scale_noise=0.1, 
                  scale_base=1.0, scale_spline=1.0, base_activation=torch.nn.SiLU,
@@ -71,7 +95,7 @@ class HybridEncoder(Module):
                               base_activation=base_activation,
                               grid_eps=grid_eps,
                               grid_range=grid_range),
-                    nn.SiLU() # SiLU for KAN
+                    nn.SiLU()
                 ]
             else:
                 layers += [
@@ -93,22 +117,36 @@ class HybridEncoder(Module):
         std = torch.exp(0.5*logvar)
         return mu, std, logvar
 
-
-# (*) KAN DECODER
+# (*) Hybrid KAN DECODER
 class HybridDecoder(Module):
-    """TVAE Decoder with a single KAN block at layer 'kan_layer_idx',
-    the rest remain as standard TVAE Linear layers.
+    """
+    Decoder module for Hybrid-KAN-TVAE.
+
+    This decoder combines standard MLP-based layers with a single Kolmogorov–Arnold 
+    Network (KAN) block at a configurable position (`kan_layer_idx`). All other layers 
+    remain consistent with the original TVAE decoder architecture.
+
+    The decoder reconstructs tabular data from latent representations by projecting 
+    from the embedding space back into the original data domain. Incorporating a single 
+    KAN layer allows for the introduction of localized nonlinearities via spline-based 
+    approximations, without fully replacing the lightweight structure of MLP layers.
+
+    This hybrid approach is useful for testing how partial KAN integration affects 
+    reconstruction quality and downstream sample fidelity.
 
     Args:
-        embedding_dim (int):
-            Size of the input vector.
-        decompress_dims (tuple or list of ints):
-            Size of each hidden layer.
-        data_dim (int):
-            Dimensions of the data.
-        kan_layer_idx (int): index of KAN layer.
-        grid_size, spline_order, etc. (int): 
-            Hyperparameters for the KAN layers. 
+        embedding_dim (int): Dimensionality of the latent space input.
+        decompress_dims (list or tuple of int): Sizes of the intermediate hidden layers in the decoder.
+        data_dim (int): Number of features in the reconstructed data (i.e., output dimensionality).
+        kan_layer_idx (int): Index of the decoder layer to be replaced with a KANLinear block.
+        grid_size (int): Number of grid points per input dimension in the KAN layer (default: 5).
+        spline_order (int): Order of the spline interpolation used in the KAN layer (default: 3).
+        scale_noise (float): Standard deviation of noise applied to the KAN spline component.
+        scale_base (float): Scaling factor for the base component in the KAN layer.
+        scale_spline (float): Scaling factor for the spline component in the KAN layer.
+        base_activation (torch.nn.Module): Activation function used for the KAN base component.
+        grid_eps (float): Small epsilon added for numerical stability during grid setup.
+        grid_range (list of float): Value range over which the KAN grid points are distributed.
     """
 
     def __init__(self, embedding_dim, decompress_dims, data_dim,
@@ -132,7 +170,7 @@ class HybridDecoder(Module):
                               base_activation=base_activation,
                               grid_eps=grid_eps,
                               grid_range=grid_range),
-                    nn.SiLU() # SiLU for KAN
+                    nn.SiLU()
                 ]
             else:
                 layers += [
@@ -179,11 +217,47 @@ def _loss_function(recon_x, x, sigmas, mu, logvar, output_info, factor):
     KLD = -0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp())
     return sum(loss) * factor / x.size()[0], KLD / x.size()[0]
 
-# (*) KAN_TVAE
+# (*) Main TVAE class override: uses Hybrid KAN Generator and Discriminator
 class HYBRID_KAN_TVAE(BaseSynthesizer):
-    """HYBRID_KAN_TVAE. Instead of MLPs, the Encoder and Decoder
-       use Kolmogorov-Arnold Networks (KANs), only in one layer"""
+    """
+    Hybrid Kolmogorov–Arnold Variational Autoencoder for Tabular Data (Hybrid-KAN-TVAE).
 
+    This class implements a hybrid version of the TVAE architecture 
+    (https://github.com/sdv-dev/CTGAN), where one layer in both the encoder and decoder 
+    is replaced with a Kolmogorov–Arnold Network (KAN) layer. All other layers remain 
+    standard MLP components, as in the original implementation.
+
+    The purpose of this hybrid model is to investigate whether inserting a single 
+    nonlinear spline-based KAN block can enhance the representational power of 
+    TVAE while maintaining computational efficiency and architectural familiarity.
+
+    The training objective, latent prior (Gaussian), and data generation strategy 
+    follow the original TVAE formulation. The decoder outputs both a reconstruction 
+    and a learned standard deviation for each continuous variable, and the loss 
+    combines reconstruction error with Kullback-Leibler divergence.
+
+    Note:
+        - The encoder consists of MLP layers with a single KAN layer inserted at a configurable index.
+        - The decoder follows the same hybrid structure, combining MLPs with one KAN block.
+        - Only one KAN block is introduced per component (encoder/decoder) for controlled experimentation.
+        - Uses tanh or softmax postprocessing depending on the feature type in output reconstruction.
+        - Designed to evaluate the contribution of KANs in low-intrusion settings.
+
+    Args:
+        embedding_dim (int): Size of the latent space vector (default: 128).
+        compress_dims (tuple of int): Hidden layer sizes for the encoder (default: (128, 128)).
+        decompress_dims (tuple of int): Hidden layer sizes for the decoder (default: (128, 128)).
+        grid_size_enc (int): Grid size for the spline basis in the encoder KAN layer (default: 5).
+        spline_order_enc (int): Spline order used in the encoder KAN (default: 3).
+        grid_size_dec (int): Grid size for the spline basis in the decoder KAN layer (default: 5).
+        spline_order_dec (int): Spline order used in the decoder KAN (default: 5).
+        l2scale (float): Weight decay (L2 regularization) used in the Adam optimizer (default: 1e-5).
+        batch_size (int): Number of samples per training batch (default: 500).
+        epochs (int): Number of training epochs (default: 300).
+        loss_factor (float): Weight of the reconstruction term in the loss (default: 2).
+        cuda (bool or str): Whether to use GPU (True), CPU (False), or specify device name (e.g., 'cuda:0').
+        verbose (bool): Whether to print training progress (default: False).
+    """
     def __init__(
         self,
         embedding_dim=128,
@@ -204,7 +278,7 @@ class HYBRID_KAN_TVAE(BaseSynthesizer):
         self.compress_dims = compress_dims
         self.decompress_dims = decompress_dims
 
-        # (*) Hyperparametrs for the KANs.
+        # (*) KAN HYPERPARAMETERS
         self.grid_size_enc = grid_size_enc
         self.spline_order_enc = spline_order_enc
         self.grid_size_dec = grid_size_dec
@@ -226,7 +300,6 @@ class HYBRID_KAN_TVAE(BaseSynthesizer):
 
         self._device = torch.device(device)
 
-    # (*) HYBRID_KAN_TVAE Fit
     @random_state
     def fit(self, train_data, discrete_columns=()):
         """Fit the HYBRID_KAN_TVAE Synthesizer models to the training data.

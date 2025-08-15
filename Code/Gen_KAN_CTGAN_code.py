@@ -21,7 +21,6 @@ Xu, L., Nightingale, A., & Krishnan, R. (2019). Modeling Tabular Data Using Cond
 https://arxiv.org/abs/1907.00503
 """
 
-
 import warnings
 import numpy as np
 import pandas as pd

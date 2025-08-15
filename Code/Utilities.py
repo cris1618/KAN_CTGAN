@@ -1,3 +1,30 @@
+"""
+Utilities for Evaluating Synthetic Tabular Data Quality and Model Transferability.
+
+This module provides a set of utility functions for quantitatively evaluating synthetic tabular datasets.
+It includes tools for statistical comparison with real data, assessing machine learning model transferability,
+and visualizing performance metrics for both regression and classification tasks.
+
+Main functionalities:
+    - `overall_similarity`: Computes a composite similarity score between real and synthetic datasets 
+      using statistical moments (mean, median, variance, etc.) and distributional metrics (KS-test, Wasserstein distance).
+    - `evaluate_all_models`: Evaluates regression performance by training models on synthetic data 
+      and testing on real data, using repeated holdout for statistical robustness.
+    - `evaluate_all_models_classification`: Analogous evaluation procedure for classification tasks, 
+      supporting categorical preprocessing and weighted scoring metrics (Accuracy, Precision, Recall, F1).
+    - `visualize_reg_score`: Visual comparison of regression metrics between real and synthetic generators, 
+      with normalized scoring and ranking.
+    - `visualize_class_score`: Similar visualization for classification metrics and overall fidelity of each generator.
+
+Note:
+    - These functions assume input data as Pandas DataFrames and models as scikit-learn compatible estimators.
+    - Designed to support benchmarking pipelines for synthetic data generation projects.
+
+Dependencies:
+    - pandas, numpy, matplotlib, scipy, scikit-learn
+"""
+
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt

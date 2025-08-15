@@ -223,7 +223,7 @@ class HybridDiscriminator(Module):
         return self.seq(input_.view(-1, self.pacdim))
 
 # (*) Main CTGAN class override: uses Hybrid KAN Generator and Discriminator
-class KAN_HYBRID_CTGAN(BaseSynthesizer):
+class HYBRID_KAN_CTGAN(BaseSynthesizer):
     """
     Kolmogorov–Arnold Hybrid Conditional Table GAN (Hybrid KAN-CTGAN) Synthesizer.
 

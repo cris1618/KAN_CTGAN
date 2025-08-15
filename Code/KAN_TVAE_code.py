@@ -1,60 +1,72 @@
-## CODE FROM: https://github.com/sdv-dev/CTGAN/blob/main/ctgan/synthesizers/tvae.py
-
-## Changes in the original code will be segnalated with proper comments and the symbol (*)
-
 """
-This file is a modified version of the original TVAE implementation:
+KAN_TVAE.py
+
+Modified TVAE Implementation with Kolmogorov–Arnold Networks (KAN).
+
+This file is based on the original TVAE implementation from:
 https://github.com/sdv-dev/CTGAN/blob/main/ctgan/synthesizers/tvae.py
 
-The only substantive change is that the encoder and decoder—
-which were originally MLPs—have been replaced with Kolmogorov–Arnold Networks.
-All other code and documentation remain unchanged.
+Main Modifications (*):
+- Replaced the Encoder and Decoder (originally MLP-based) with KAN-based architectures.
+- Introduced new KAN-specific hyperparameters (e.g., grid size, spline order).
+- Adjusted activation and reconstruction mechanisms to suit KAN layers.
 
-For the original CTGAN design, see:
-    Xu, L., Nightingale, A., & Krishnan, R. (2019).
-    Modeling Tabular Data Using Conditional GAN.
-    https://arxiv.org/abs/1907.00503
+All other logic, structure, and function docstrings have been retained from the original source,
+unless explicitly noted otherwise. Any line or block marked with (*) indicates a user-introduced
+modification to the original TVAE codebase.
+
+For reference on TVAE:
+Xu, L., Skoularidou, M., Cuesta-Infante, A., & Veeramachaneni, K. (2019).
+Modeling Tabular data using Conditional GAN. NeurIPS 2019.
+https://arxiv.org/abs/1907.00503
 """
 
 import numpy as np
 import pandas as pd
 import torch
-from torch.nn import Linear, Module, Parameter, ReLU, Sequential
+from torch.nn import Module, Parameter, Sequential
 from torch.nn.functional import cross_entropy
 from torch.optim import Adam
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
-
 from ctgan.data_transformer import DataTransformer
 from ctgan.synthesizers.base import BaseSynthesizer, random_state
 
-# Import KAN (*)
-from KAN_code import KAN, KANLinear
+# (*) Additional import for Kolmogorov–Arnold Networks
+from KAN_code import KANLinear
 
 # (*) KAN ENCODER
-class EncoderKAN(Module):
-    """Encoder for the KAN_TVAE using Kolmogorov-Arnold Layers(KAN)
-    instead of the standard Residual blocks and Linear layers.
+class KAN_Encoder(Module):
+    """
+    Encoder module for KAN-TVAE.
 
-    This Encoder uses KANLinear to map x -> [mu, log(sd^2)] (Mean, and log 
-    of standard deviation squared). 
+    This encoder replaces the standard MLP-based layers from the original TVAE
+    with Kolmogorov–Arnold Network (KAN) components. It maps high-dimensional
+    input data into a latent space represented by a mean and variance vector,
+    using stacked KANLinear layers followed by two independent KAN output heads.
+
+    Unlike the original MLP-based encoder, this version introduces flexible
+    spline-based function approximators to capture complex nonlinear
+    dependencies in tabular data.
 
     Args:
-        data_dim (int):
-            Dimensions of the data.
-        compress_dims (tuple or list of ints):
-            Size of each hidden layer.
-        embedding_dim (int):
-            Size of the output vector.
-        grid_size, spline_order, etc. (int): 
-            Hyperparameters for the KAN layers. 
+        data_dim (int): Dimensionality of the input data.
+        compress_dims (list or tuple of int): Sizes of intermediate hidden layers in the encoder.
+        embedding_dim (int): Size of the latent space vector (i.e., output dimensionality).
+        grid_size (int): Number of grid points per input dimension in each KAN layer (default: 5).
+        spline_order (int): Order of the spline interpolation used in KAN layers (default: 3).
+        scale_noise (float): Standard deviation of noise applied to KAN spline components.
+        scale_base (float): Scaling factor for the base component in KAN layers.
+        scale_spline (float): Scaling factor for the spline component in KAN layers.
+        base_activation (torch.nn.Module): Activation function used for the base component.
+        grid_eps (float): Numerical stability epsilon for grid initialization.
+        grid_range (list of float): Value range over which KAN grid points are distributed.
     """
-
     def __init__(self, data_dim, compress_dims, embedding_dim, 
                  grid_size=5, spline_order=3, scale_noise=0.1, 
                  scale_base=1.0, scale_spline=1.0, base_activation=torch.nn.SiLU,
                  grid_eps=0.02, grid_range=[-1, 1]):
-        super(EncoderKAN, self).__init__()
+        super(KAN_Encoder, self).__init__()
 
         # Single KAN with final output size = 2 * embedding_dim
         dim = data_dim
@@ -87,32 +99,35 @@ class EncoderKAN(Module):
         std = torch.exp(0.5 * logvar)
         return mu, std, logvar
 
-
 # (*) KAN DECODER
-class DecoderKAN(Module):
-    """Decoder for the KAN_TVAE using Kolmogorov-Arnold Layers(KAN)
-    instead of the standard Residual blocks and Linear layers.
+class KAN_Decoder(Module):
+    """
+    Decoder module for KAN-TVAE.
 
-    This Decoder uses KANLinear to map [mu, log(sd^2)] (Mean and log 
-    of standard deviation squared from the latent space, i.e. output 
-    of the encoder) ->  x̂ of dimension data_dim. 
+    This decoder reconstructs tabular data from latent representations using
+    Kolmogorov–Arnold Network (KAN) components instead of standard MLPs.
+    It maps a latent vector sampled from a Gaussian distribution to the
+    original data space through a sequence of KANLinear layers, followed by
+    a trainable output variance (sigma) parameter.
 
     Args:
-        embedding_dim (int):
-            Size of the input vector.
-        decompress_dims (tuple or list of ints):
-            Size of each hidden layer.
-        data_dim (int):
-            Dimensions of the data.
-        grid_size, spline_order, etc. (int): 
-            Hyperparameters for the KAN layers. 
+        embedding_dim (int): Dimensionality of the latent representation (input to the decoder).
+        decompress_dims (list or tuple of int): Sizes of hidden layers within the decoder.
+        data_dim (int): Dimensionality of the output data (i.e., the number of columns in the transformed table).
+        grid_size (int): Number of grid points per input dimension in each KAN layer (default: 5).
+        spline_order (int): Order of the spline interpolation used in KAN layers (default: 3).
+        scale_noise (float): Standard deviation of noise added to the spline component (default: 0.1).
+        scale_base (float): Scaling factor for the base (linear) component of KAN layers.
+        scale_spline (float): Scaling factor for the spline (nonlinear) component of KAN layers.
+        base_activation (torch.nn.Module): Activation function used for the base (default: SiLU).
+        grid_eps (float): Numerical offset to prevent overlapping grid boundaries (default: 0.02).
+        grid_range (list of float): Value range over which grid points are distributed (default: [-1, 1]).
     """
-
     def __init__(self, embedding_dim, decompress_dims, data_dim,
                  grid_size=5, spline_order=3, scale_noise=0.1, 
                  scale_base=1.0, scale_spline=1.0, base_activation=torch.nn.SiLU,
                  grid_eps=0.02, grid_range=[-1, 1]):
-        super(DecoderKAN, self).__init__()
+        super(KAN_Decoder, self).__init__()
         dim = embedding_dim
         seq = []
         for item in list(decompress_dims):
@@ -136,7 +151,6 @@ class DecoderKAN(Module):
     def forward(self, z):
         """Decode the passed input z"""
         return  self.seq(z), self.sigma
-    
 
 def _loss_function(recon_x, x, sigmas, mu, logvar, output_info, factor):
     st = 0
@@ -164,11 +178,43 @@ def _loss_function(recon_x, x, sigmas, mu, logvar, output_info, factor):
     KLD = -0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp())
     return sum(loss) * factor / x.size()[0], KLD / x.size()[0]
 
-# (*) KAN_TVAE
+# (*) Main TVAE class override: uses KAN Encoder and Decoder
 class KAN_TVAE(BaseSynthesizer):
-    """KAN_TVAE. Instead of MLPs, the Encoder and Decoder
-       use Kolmogorov-Arnold Networks (KANs)"""
+    """
+    Kolmogorov–Arnold Variational Autoencoder for Tabular Data (KAN-TVAE).
 
+    This class implements a modified version of the original TVAE architecture
+    (https://github.com/sdv-dev/CTGAN), where both the encoder and decoder—originally
+    built with MLPs—are replaced by Kolmogorov–Arnold Networks (KANs) to capture
+    richer nonlinear relationships in tabular data.
+
+    The KAN-TVAE model follows the same training objective and structure as the original
+    TVAE, including a Gaussian latent prior and a mixed output decoder that handles
+    both continuous and categorical features. It uses spline-based KAN layers to map
+    inputs to latent space and reconstruct samples during generation.
+
+    Note:
+        - The encoder replaces MLP layers with KANLinear layers and outputs (μ, logσ²).
+        - The decoder replaces MLP layers with KANLinear layers and reconstructs inputs
+          with a trainable per-feature standard deviation.
+        - The loss combines a data reconstruction term and KL divergence.
+        - The output is postprocessed with `tanh` or softmax, depending on the column type.
+
+    Args:
+        embedding_dim (int): Size of the latent space vector (default: 128).
+        compress_dims (tuple of int): Hidden layer sizes for the encoder (default: (128, 128)).
+        decompress_dims (tuple of int): Hidden layer sizes for the decoder (default: (128, 128)).
+        grid_size_enc (int): Grid size for spline basis in KAN encoder layers (default: 5).
+        spline_order_enc (int): Spline order in encoder (default: 3).
+        grid_size_dec (int): Grid size for spline basis in KAN decoder layers (default: 5).
+        spline_order_dec (int): Spline order in decoder (default: 5).
+        l2scale (float): Weight decay (L2 regularization) used in Adam optimizer (default: 1e-5).
+        batch_size (int): Number of samples per training batch (default: 500).
+        epochs (int): Number of training epochs (default: 300).
+        loss_factor (float): Weight of the reconstruction term in the loss (default: 2).
+        cuda (bool or str): Whether to use GPU (True), CPU (False), or device name (e.g. 'cuda:0').
+        verbose (bool): Whether to print progress during training (default: False).
+    """
     def __init__(
         self,
         embedding_dim=128,
@@ -189,7 +235,7 @@ class KAN_TVAE(BaseSynthesizer):
         self.compress_dims = compress_dims
         self.decompress_dims = decompress_dims
 
-        # (*) Hyperparametrs for the KANs.
+        # (*) KAN HYPERPARAMETERS
         self.grid_size_enc = grid_size_enc
         self.spline_order_enc = spline_order_enc
         self.grid_size_dec = grid_size_dec
@@ -233,8 +279,8 @@ class KAN_TVAE(BaseSynthesizer):
 
         data_dim = self.transformer.output_dimensions
         # (*) Use KAN_Encder and KAN_Decoder
-        encoder = EncoderKAN(data_dim, self.compress_dims, self.embedding_dim).to(self._device)
-        self.decoder = DecoderKAN(self.embedding_dim, self.decompress_dims, data_dim).to(self._device)
+        encoder = KAN_Encoder(data_dim, self.compress_dims, self.embedding_dim).to(self._device)
+        self.decoder = KAN_Decoder(self.embedding_dim, self.decompress_dims, data_dim).to(self._device)
         optimizerAE = Adam(
             list(encoder.parameters()) + list(self.decoder.parameters()), weight_decay=self.l2scale
         )

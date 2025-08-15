@@ -1,8 +1,12 @@
+"""
+KAN_code.py
+
+Simply the code given at: https://github.com/Blealtan/efficient-kan/blob/master/src/efficient_kan/kan.py
+"""
+
 import torch
 import torch.nn.functional as F
 import math
-
-# Changes in the original code by me are denoted by (*)
 
 # Import KAN Code
 class KANLinear(torch.nn.Module):
